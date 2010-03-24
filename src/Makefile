@@ -12,6 +12,7 @@ COMM = -UCELL_COMM
 endif
 
 CC=gcc
+AR=ar
 
 #CFLAGS=-g -Wall -DDEBUG -DLOG_FILE
 #CFLAGS=-g -Wall -DDEBUG
@@ -52,7 +53,7 @@ cell: $(patsubst %,%-cell,$(EXECS))
 
 $(LIBNAME): $(OBJLIB)
 	rm -f $(LIBNAME) 
-	ar -rc $(LIBNAME) $(OBJLIB)
+	$(AR) rc $(LIBNAME) $(OBJLIB)
 	$(RANLIB) $(LIBNAME)
 
 
