@@ -1,7 +1,7 @@
 /*
  *  Adaptive search
  *
- *  Copyright (C) 2002-2010 Daniel Diaz, Philippe Codognet and Salvador Abreu
+ *  Copyright (C) 2002-2011 Daniel Diaz, Philippe Codognet and Salvador Abreu
  *
  *  no_next_j.c: wrapper when user function Next_J is not defined
  */

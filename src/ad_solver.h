@@ -76,9 +76,10 @@ typedef struct
   int nb_local_min_tot;		/* nb of local mins total */
 
 
-				/* --- other values (e.g. from main) not used the solver engine --- */
+				/* --- other values (e.g. from main) not used by the solver engine --- */
 
-  int param;			/* command-line parameter */
+  int param;			/* command-line integer parameter */
+  char param_file[512];         /* command-line file name parameter */
   int seed;			/* random seed (or -1 if any) */
   int reset_percent;		/* percentage of variables to reset */
   int data32[4];		/* some 32 bits  */
@@ -119,22 +120,45 @@ int ad_has_log_file;
 
 int Ad_Solve(AdData *p_ad);
 
+void Ad_Swap(int i, int j);
+
+void Ad_Un_Mark(int i);
+
 void Ad_Display(int *t, AdData *p_ad, unsigned *mark);
 
 							/* functions provided by the user */
 
 int Cost_Of_Solution(int should_be_recorded);		/* mandatory */
 
-int Cost_On_Variable(int i);				/* optional else exhaustive search) */
+int Cost_On_Variable(int i);				/* optional else exhaustive search */
 
-int Cost_If_Swap(int current_cost, int i, int j);	/* optional else use Cost_Of_Solution) */
+int Cost_If_Swap(int current_cost, int i, int j);	/* optional else use Cost_Of_Solution */
 
-void Executed_Swap(int i, int j); 			/* optional else use Cost_Of_Solution) */
+void Executed_Swap(int i, int j); 			/* optional else use Cost_Of_Solution */
 
 int Next_I(int i);					/* optional else from 0 to p_ad->size-1 */
 
 int Next_J(int i, int j);				/* optional else from i+1 to p_ad->size-1 */
 
+int Reset(int nb_to_reset, AdData *p_ad);		/* optional else random reset */
+
 void Display_Solution(AdData *p_ad);			/* optional else basic display */
+
+
+
+
+#if 0
+#define IGNORE_MARK_IF_BEST
+#endif
+
+
+  /* what to do with marked vars at reset: 
+   * 0=nothing, 1=unmark reset (swapped) vars, 2=unmark all vars 
+   */
+
+//#define UNMARK_AT_RESET  0
+//#define UNMARK_AT_RESET  1
+#define UNMARK_AT_RESET  2
+
 
 #endif /* !AD_SOLVER_H */

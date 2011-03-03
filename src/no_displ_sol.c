@@ -1,7 +1,7 @@
 /*
  *  Adaptive search
  *
- *  Copyright (C) 2002-2010 Daniel Diaz, Philippe Codognet and Salvador Abreu
+ *  Copyright (C) 2002-2011 Daniel Diaz, Philippe Codognet and Salvador Abreu
  *
  *  no_displ_sol.c: wrapper when user function Display_Solution is not defined
  */

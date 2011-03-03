@@ -445,7 +445,7 @@ Display_Solution(AdData *p_ad)
     printf(" %3d", SIZE(i));
   printf("\n");
 
-#if 0
+ #if 0
   static char **ascii_repres = NULL;
   int pb_no = p_ad->param;
   int master_square_size = pb[pb_no].master_square_size;

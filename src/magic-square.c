@@ -1,7 +1,7 @@
 /*
  *  Adaptive search
  *
- *  Copyright (C) 2002-2010 Daniel Diaz, Philippe Codognet and Salvador Abreu
+ *  Copyright (C) 2002-2011 Daniel Diaz, Philippe Codognet and Salvador Abreu
  *
  *  magic_square.c: magic squares
  */
@@ -22,6 +22,10 @@
  *-------*/
 
 /* for a k in 0..size-1 gives line, col, d1 (1/0), d2 (0/1) */
+
+#if 1
+#define CELL
+#endif
 
 #ifdef CELL
 

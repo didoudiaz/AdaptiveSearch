@@ -1,7 +1,7 @@
 /*
  *  Adaptive search
  *
- *  Copyright (C) 2002-2010 Daniel Diaz, Philippe Codognet and Salvador Abreu
+ *  Copyright (C) 2002-2011 Daniel Diaz, Philippe Codognet and Salvador Abreu
  *
  *  ad_solver.c: general solver
  */
@@ -16,51 +16,6 @@
 #include "ad_solver.h"
 #include "tools.h"
 
-
-#if defined(CELL) && defined(__SPU__)
-
-#ifdef CELL_COMM		// -- (un)define in the command line
-
-#define CELL_COMM_SEND_WHEN    0   // 0: local min is reached, 1: reset occurs, K iters are reached
-#define CELL_COMM_SEND_TO      0    // 0: neighbors only, 1: all
-#define CELL_COMM_PROB_ACCEPT  80  // probability to accept the information
-#define CELL_COMM_ACTION       0    // 0: restart, 1 reset, -1: nothing (test only)
-
-
-#if CELL_COMM_SEND_TO == 0
-#define CELL_COMM_SEND_CMD(v)  as_mbx_send_next(v)
-#elif CELL_COMM_SEND_TO == 1
-#define CELL_COMM_SEND_CMD(v)  	/*  if (v <= best_cost * 1.1) */as_mbx_send_all(v)
-#endif
-
-
-#if CELL_COMM_ACTION == 0
-#define CELL_COMM_ACTION_CMD  goto restart
-#elif  CELL_COMM_ACTION == 1
-#define CELL_COMM_ACTION_CMD  Reset(200)
-#endif
-
-
-#include "cell-extern.h"
-
-
-#endif /* CELL_COMM */
-
-#endif	/* CELL */
-
-
-
-#if 0
-#define IGNORE_MARK_IF_BEST
-#endif
-
-
-  /* what to do with marked vars at reset: 
-   * 0=nothing, 1=unmark reset (swapped) vars, 2=unmark all vars 
-   */
-
-//#define UNMARK_AT_RESET  0
-#define UNMARK_AT_RESET  2
 
 
 /*-----------*
@@ -114,7 +69,7 @@ static FILE *f_log;		/* log file */
 #endif
 
 
-//#define BASE_MARK    ad.nb_iter
+//#define BASE_MARK    ((unsigned) ad.nb_iter)
 #define BASE_MARK    ((unsigned) ad.nb_swap)
 #define Mark(i, k)   mark[i] = BASE_MARK + (k)
 #define UnMark(i)    mark[i] = 0
@@ -160,6 +115,18 @@ Error_All_Marked()
   exit(1);
 }
 #endif
+
+
+
+/*
+ * AD_UN_MARK
+ */
+void
+Ad_Un_Mark(int i)
+{
+  UnMark(i);
+}
+
 
 
 /*
@@ -237,15 +204,18 @@ Select_Var_Min_Conflict(void)
 
   for(j = 0; j < ad.size; j++)
     {
-      x = Cost_If_Swap(ad.total_cost, j, max_i);
 #if defined(DEBUG) && (DEBUG&1)
-      swap[j] = x;
+      swap[j] = Cost_If_Swap(ad.total_cost, j, max_i);
 #endif
 
 #ifndef IGNORE_MARK_IF_BEST
       if (Marked(j))
 	continue;
-#else
+#endif
+
+      x = Cost_If_Swap(ad.total_cost, j, max_i);
+
+#ifdef IGNORE_MARK_IF_BEST
       if (Marked(j) && x >= best_cost)
 	continue;
 #endif
@@ -314,7 +284,7 @@ Select_Vars_To_Swap(void)
   int x;
 
   list_ij_nb = 0;
-  new_cost = ad.total_cost;
+  new_cost = BIG;
   nb_var_marked = 0;
 
   i = -1;
@@ -323,17 +293,20 @@ Select_Vars_To_Swap(void)
       if (Marked(i))
 	{
 	  nb_var_marked++;
+#ifndef IGNORE_MARK_IF_BEST
 	  continue;
+#endif
 	}
       j = -1;
       while((unsigned) (j = Next_J(i, j)) < (unsigned) ad.size) // false if j < 0
 	{
-	  x = Cost_If_Swap(ad.total_cost, i, j);
-
 #ifndef IGNORE_MARK_IF_BEST
 	  if (Marked(j))
 	    continue;
-#else
+#endif
+	  x = Cost_If_Swap(ad.total_cost, i, j);
+
+#ifdef IGNORE_MARK_IF_BEST
 	  if (Marked(j) && x >= best_cost)
 	    continue;
 #endif
@@ -344,7 +317,7 @@ Select_Vars_To_Swap(void)
 		{
 		  new_cost = x;
 		  list_ij_nb = 0;
-		  if (ad.first_best == 1)
+		  if (ad.first_best == 1 && x < ad.total_cost)
 		    {
 		      max_i = i;
 		      min_j = j;
@@ -359,6 +332,12 @@ Select_Vars_To_Swap(void)
     }
 
   ad.nb_same_var += list_ij_nb;
+
+#if 0
+  if (new_cost >= ad.total_cost)
+    printf("   *** LOCAL MIN ***  iter: %d  next cost:%d >= total cost:%d #candidates: %d\n", ad.nb_iter, new_cost, ad.total_cost, list_ij_nb);
+#endif
+
   if (new_cost >= ad.total_cost)
     {
       if (list_ij_nb == 0 || 
@@ -375,8 +354,7 @@ Select_Vars_To_Swap(void)
 	  goto end;
 	}
 
-      if (!USE_PROB_SELECT_LOC_MIN && 
-	  (x = Random(list_ij_nb + ad.size)) < ad.size)
+      if (!USE_PROB_SELECT_LOC_MIN && (x = Random(list_ij_nb + ad.size)) < ad.size)
 	{
 	  max_i = min_j = x;
 	  goto end;
@@ -399,12 +377,12 @@ Select_Vars_To_Swap(void)
 
 
 /*
- *  SWAP
+ *  AD_SWAP
  *
  *  Swaps 2 variables.
  */
-static void
-Swap(int i, int j)
+void
+Ad_Swap(int i, int j)
 {
   int x;
 
@@ -416,26 +394,22 @@ Swap(int i, int j)
 
 
 
-static void
-Reset(int n)
-{
-  while(n--)
-    {
-      max_i = Random(ad.size);
-      min_j = Random(ad.size);
-      Swap(max_i, min_j);
 
-#if UNMARK_AT_RESET == 1
-      UnMark(max_i);
-      UnMark(min_j);
+static void
+Do_Reset(int n)
+{
+#if defined(DEBUG) && (DEBUG&1)
+  if (ad.debug)
+    printf(" * * * * * * RESET n=%d\n", n);
 #endif
-    }
+
+  int cost = Reset(n, &ad);
 
 #if UNMARK_AT_RESET == 2
   memset(mark, 0, ad.size * sizeof(unsigned));
 #endif
   ad.nb_reset++;
-  ad.total_cost = Cost_Of_Solution(1);
+  ad.total_cost = (cost < 0) ? Cost_Of_Solution(1) : cost;
 }
 
 
@@ -530,7 +504,7 @@ Ad_Solve(AdData *p_ad)
 #if defined(DEBUG) && (DEBUG&2)
   if (ad.do_not_init)
     {
-      printf ("********* received data (do_not_init=1):\n");
+      printf("********* received data (do_not_init=1):\n");
       Ad_Display(ad.sol, &ad, NULL);
       printf("******************************-\n");
     }
@@ -560,48 +534,22 @@ Ad_Solve(AdData *p_ad)
   nb_in_plateau = 0;
 
   best_cost = ad.total_cost = Cost_Of_Solution(1);
+  int best_of_best = BIG;
+
 
   while(ad.total_cost)
     {
-      ad.nb_iter++;
-
-#ifdef CELL_COMM
-      int comm_cost = (1 << 30);
-      while(as_mbx_avail())
+      if (best_cost < best_of_best)
 	{
-	  int c= as_mbx_read();
-	  if (c < comm_cost)
-	    comm_cost = c;
-	  usleep(1000);
-	}
-      if (1)
-	{
-	  //	  int comm_cost = as_mbx_read();
-#ifdef CELL_COMM_ACTION_CMD
-	  if (ad.total_cost > comm_cost && Random(100) < (unsigned) CELL_COMM_PROB_ACCEPT)
-	    {
-	      int n;
-	      //n = (ad.size - (comm_cost * ad.size / ad.total_cost)) / 10;
-	      n = 50;
-	      if (n < 0 || n > ad.size)
-		//		printf("CELL COMM: received a better cost (%d < %d): reset %d vars !\n", comm_cost, ad.total_cost, n);
-	      //Reset(n);
-		    goto restart;
+	  best_of_best = best_cost;
+#if 0 //******************************
+	  printf("exec: %3d  iter: %10d  BEST %d (#locmin:%d  resets:%d)\n",  ad.nb_restart, ad.nb_iter, best_of_best, ad.nb_local_min, ad.nb_reset);
+	  Display_Solution(&ad);
 
-	      //CELL_COMM_ACTION_CMD;
-	    }
-#endif  /* CELL_COMM_ACTION_CMD */
-	}
-#endif	/* CELL_COMM */
-
-#if defined(CELL_COMM) && CELL_COMM_SEND_WHEN > 1
-      if (ad.nb_iter % CELL_COMM_SEND_WHEN == 0)
-	{
-	  //printf("CELL COMM: iter:%d - sending at every %d - cost:%d\n", ad.nb_iter, CELL_COMM_SEND_WHEN, ad.total_cost);
-	  CELL_COMM_SEND_CMD(ad.total_cost);
-	}
 #endif
+	}
 
+      ad.nb_iter++;
 
       if (ad.nb_iter >= ad.restart_limit)
 	{
@@ -642,7 +590,10 @@ Ad_Solve(AdData *p_ad)
 	}
 
       if (new_cost < best_cost)
-	best_cost = new_cost;
+	{
+	  best_cost = new_cost;
+	}
+
 
       if (!ad.exhaustive)
 	{
@@ -665,7 +616,7 @@ Ad_Solve(AdData *p_ad)
       if (new_cost >= ad.total_cost && nb_in_plateau > 15)
 	{
 	  Emit_Log("\tTOO BIG PLATEAU - RESET");
-	  Reset(ad.nb_var_to_reset);
+	  Do_Reset(ad.nb_var_to_reset);
 	}
 #endif
       nb_in_plateau++;
@@ -678,25 +629,17 @@ Ad_Solve(AdData *p_ad)
 	  ad.nb_local_min++;
 	  Mark(max_i, ad.freeze_loc_min);
 
-#if defined(CELL_COMM) && CELL_COMM_SEND_WHEN == 0
-	  CELL_COMM_SEND_CMD(ad.total_cost);
-#endif
-
 	  if (nb_var_marked + 1 >= ad.reset_limit)
 	    {
 	      Emit_Log("\tTOO MANY FROZEN VARS - RESET");
-
-#if defined(CELL_COMM) && CELL_COMM_SEND_WHEN == 1
-	      CELL_COMM_SEND_CMD(ad.total_cost);
-#endif
-	      Reset(ad.nb_var_to_reset);
+	      Do_Reset(ad.nb_var_to_reset);
 	    }
 	}
       else
 	{
 	  Mark(max_i, ad.freeze_swap);
 	  Mark(min_j, ad.freeze_swap);
-	  Swap(max_i, min_j);
+	  Ad_Swap(max_i, min_j);
 	  Executed_Swap(max_i, min_j);
 	  ad.total_cost = new_cost;
 	}

@@ -4,7 +4,6 @@ vpath    %.c .:..
 
 S        = ..
 DEBUG    = 0
-COMM	 = -UCELL_COMM
 
 ###############################################################################
 
@@ -23,7 +22,6 @@ OBJS := $(OBJS_$(BENCH))
 IMPORTS := libdefaults.a
 
 CFLAGS += -DDEBUG=$(DEBUG)
-CFLAGS += $(COMM)
 CFLAGS += -DCELL=1 -UAS_PPU -DAS_SPU=1
 CFLAGS += -Wno-unused-parameter
 

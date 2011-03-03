@@ -5,7 +5,10 @@ VERSION
 NEWS
 src/DISTRIB_FILES
 src/Makefile
+src/Makefile.cell
 src/[a-z][a-z]*.[ch]
+src/spu/Makefile
+src/spu/[a-z][a-z]*.[ch]
 doc/README
 doc/Makefile
 doc/do_latex

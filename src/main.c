@@ -1,7 +1,7 @@
 /*
  *  Adaptive search
  *
- *  Copyright (C) 2002-2010 Daniel Diaz, Philippe Codognet and Salvador Abreu
+ *  Copyright (C) 2002-2011 Daniel Diaz, Philippe Codognet and Salvador Abreu
  *
  *  main.c: benchmark main function
  */
@@ -32,7 +32,9 @@ static int check_valid;
 static int read_initial;	/* 0=no, 1=yes, 2=all threads use the same (CELL specific) */
 
 
-int param_needed;		/* overwritten by benches if an argument is needed */
+int param_needed;		/* overwritten by benches if an argument is needed (> 0 = integer, < 0 = file name) */
+char *user_stat_name;		/* overwritten by benches if a user statistics is needed */
+int (*user_stat_fct)(AdData *p_ad); /* overwritten by benches if a user statistics is needed */
 
 
 /*------------*
@@ -70,7 +72,6 @@ void Solve(AdData *p_ad);
 #endif	/* !CELL */
 
 
-
 /*
  *  MAIN
  *
@@ -81,28 +82,33 @@ main(int argc, char *argv[])
 {
   static AdData data;		/* to be init with 0 (debug only) */
   AdData *p_ad = &data;
-  int i;
+  int i, user_stat = 0;
 
   double time_one0, time_one;
   double nb_same_var_by_iter, nb_same_var_by_iter_tot;
 
-  int nb_iter_cum;
-  int nb_local_min_cum;
-  int nb_swap_cum;
-  int nb_reset_cum;
+  int    nb_iter_cum;
+  int    nb_local_min_cum;
+  int    nb_swap_cum;
+  int    nb_reset_cum;
   double nb_same_var_by_iter_cum;
 
-  int nb_restart_cum,                nb_restart_min,              nb_restart_max;
-  double time_cum,                   time_min,                    time_max;
 
-  int nb_iter_tot_cum,               nb_iter_tot_min,             nb_iter_tot_max;
-  int nb_local_min_tot_cum,          nb_local_min_tot_min,        nb_local_min_tot_max;
-  int nb_swap_tot_cum,               nb_swap_tot_min,             nb_swap_tot_max;
-  int nb_reset_tot_cum,              nb_reset_tot_min,            nb_reset_tot_max;
+  int    nb_restart_cum,              nb_restart_min,              nb_restart_max;
+  double time_cum,                    time_min,                    time_max;
+
+  int    nb_iter_tot_cum,             nb_iter_tot_min,             nb_iter_tot_max;
+  int    nb_local_min_tot_cum,        nb_local_min_tot_min,        nb_local_min_tot_max;
+  int    nb_swap_tot_cum,             nb_swap_tot_min,             nb_swap_tot_max;
+  int    nb_reset_tot_cum,            nb_reset_tot_min,            nb_reset_tot_max;
   double nb_same_var_by_iter_tot_cum, nb_same_var_by_iter_tot_min, nb_same_var_by_iter_tot_max;
 
+  int    user_stat_cum,               user_stat_min,               user_stat_max;
+  
 
-  char buff[256];
+
+  char buff[256], str[32];
+
 
   Parse_Cmd_Line(argc, argv, p_ad);
 
@@ -116,7 +122,7 @@ main(int argc, char *argv[])
   p_ad->actual_value = NULL;
   p_ad->base_value = 0;
   p_ad->break_nl = 0;
-				/* defaults */
+  /* defaults */
 
   Init_Parameters(p_ad);
 
@@ -136,7 +142,14 @@ main(int argc, char *argv[])
   p_ad->sol = malloc(p_ad->size_in_bytes);
 
   if (p_ad->nb_var_to_reset == -1)
-    p_ad->nb_var_to_reset = Div_Round_Up(p_ad->size * p_ad->reset_percent, 100);
+    {
+      p_ad->nb_var_to_reset = Div_Round_Up(p_ad->size * p_ad->reset_percent, 100);
+      if (p_ad->nb_var_to_reset < 2)
+	{
+	  p_ad->nb_var_to_reset = 2;
+	  printf("increasing nb var to reset since too small, now = %d\n", p_ad->nb_var_to_reset);
+	}
+    }
 
   printf("current random seed used: %d\n", p_ad->seed);
   printf("variables of loc min are frozen for: %d swaps\n", p_ad->freeze_loc_min);
@@ -179,17 +192,21 @@ main(int argc, char *argv[])
 	  nb_same_var_by_iter = (double) p_ad->nb_same_var / p_ad->nb_iter;
 	  nb_same_var_by_iter_tot = (double) p_ad->nb_same_var_tot / p_ad->nb_iter_tot;
 
-	  printf("%5d %7.2f %7d %7d %7d %7d %7.1f %7d %7d %7d %7d %7.1f\n", 
+	  printf("%5d %8.2f %8d %8d %8d %8d %8.1f %8d %8d %8d %8d %8.1f", 
 		 p_ad->nb_restart, time_one, 
 		 p_ad->nb_iter, p_ad->nb_local_min, p_ad->nb_swap, 
 		 p_ad->nb_reset, nb_same_var_by_iter,
 		 p_ad->nb_iter_tot, p_ad->nb_local_min_tot, p_ad->nb_swap_tot, 
 		 p_ad->nb_reset_tot, nb_same_var_by_iter_tot);
+	  if (user_stat_fct)
+	    printf(" %8d", (*user_stat_fct)(p_ad));
+	  printf("\n");
 	}
       else
 	{
-	  printf("in %.2f secs (%d iters, %d swaps, %d restarts)\n", 
-		 time_one, p_ad->nb_iter_tot, p_ad->nb_swap_tot, p_ad->nb_restart);
+	  printf("in %.2f secs (%d restarts, %d iters, %d loc min, %d swaps, %d resets)\n", 
+		 time_one, p_ad->nb_restart, p_ad->nb_iter_tot, p_ad->nb_local_min_tot, 
+		 p_ad->nb_swap_tot, p_ad->nb_reset_tot);
 	}
 
       return 0;
@@ -197,11 +214,20 @@ main(int argc, char *argv[])
 
   putchar('\n');
 
-  sprintf(buff, "|Count|restart|    time |   iters | loc min |   swaps "
-	  "|  resets |same/iter|\n");
 
-  if (param_needed)
+  if (user_stat_name)
+    sprintf(str, " %8s |", user_stat_name);
+  else
+    *str = '\0';
+
+  sprintf(buff, "|Count|restart|     time |    iters |  loc min |    swaps "
+	  "|   resets | same/iter|%s\n", str);
+
+  if (param_needed > 0)
     printf("%*d\n", (int) strlen(buff)/2, p_ad->param);
+  else if (param_needed < 0)
+    printf("%*s\n", (int) strlen(buff)/2, p_ad->param_file);
+    
   
   printf("%s", buff);
   for(i = 0; buff[i] != '\n'; i++)
@@ -211,22 +237,22 @@ main(int argc, char *argv[])
   printf("\n\n");
 
   
-  nb_restart_cum = time_cum = 0;
+  nb_restart_cum = time_cum = user_stat_cum = 0;
 
   nb_iter_cum = nb_local_min_cum = nb_swap_cum = nb_reset_cum = 0;
-  nb_same_var_by_iter_cum = 0;
+  nb_same_var_by_iter_cum = user_stat_cum = 0;
 
 
   nb_iter_tot_cum = nb_local_min_tot_cum = nb_swap_tot_cum = nb_reset_tot_cum = 0;
   nb_same_var_by_iter_tot_cum = 0;
 
-  nb_restart_min = (1 << 30);
+  nb_restart_min = user_stat_min = (1 << 30);
   time_min = 1e100;
   
   nb_iter_tot_min = nb_local_min_tot_min = nb_swap_tot_min = nb_reset_tot_min = (1 << 30);
   nb_same_var_by_iter_tot_min = 1e100;
 
-  nb_restart_max = 0;
+  nb_restart_max = user_stat_max = 0;
   time_max = 0;
  
   nb_iter_tot_max = nb_local_min_tot_max = nb_swap_tot_max = nb_reset_tot_max = 0;
@@ -237,8 +263,11 @@ main(int argc, char *argv[])
     {
       Set_Initial(p_ad);
 
+
+
       p_ad->seed = Random(65536);
       time_one0 = (double) User_Time();
+      //if (i == 57) printf("\n\n\nseed ================ %d\n", p_ad->seed), xxx=1;
       Solve(p_ad);
       time_one = ((double) User_Time() - time_one0) / 1000;
 
@@ -248,6 +277,10 @@ main(int argc, char *argv[])
 
 
       Verify_Sol(p_ad);
+
+      if (user_stat_fct)
+	user_stat = (*user_stat_fct)(p_ad);
+
 
       nb_same_var_by_iter = (double) p_ad->nb_same_var / p_ad->nb_iter;
       nb_same_var_by_iter_tot = (double) p_ad->nb_same_var_tot / p_ad->nb_iter_tot;
@@ -259,6 +292,7 @@ main(int argc, char *argv[])
       nb_swap_cum += p_ad->nb_swap;
       nb_reset_cum += p_ad->nb_reset;
       nb_same_var_by_iter_cum += nb_same_var_by_iter;
+      user_stat_cum += user_stat;
 
       nb_iter_tot_cum += p_ad->nb_iter_tot;
       nb_local_min_tot_cum += p_ad->nb_local_min_tot;
@@ -280,6 +314,8 @@ main(int argc, char *argv[])
 	nb_reset_tot_min = p_ad->nb_reset_tot;
       if (nb_same_var_by_iter_tot_min > nb_same_var_by_iter_tot)
 	nb_same_var_by_iter_tot_min = nb_same_var_by_iter_tot;
+      if (user_stat_min > user_stat)
+	user_stat_min = user_stat;
 
       if (nb_restart_max < p_ad->nb_restart)
 	nb_restart_max = p_ad->nb_restart;
@@ -295,48 +331,72 @@ main(int argc, char *argv[])
 	nb_reset_tot_max = p_ad->nb_reset_tot;
       if (nb_same_var_by_iter_tot_max < nb_same_var_by_iter_tot)
 	nb_same_var_by_iter_tot_max = nb_same_var_by_iter_tot;
+      if (user_stat_max < user_stat)
+	user_stat_max = user_stat;
 
 
       switch(disp_mode)
 	{
 	case 0:			/* only last iter counters */
 	case 2:			/* last iter followed by restart if needed */
-	  printf("|%4d | %5d%c| %7.2f | %7d | %7d | %7d | %7d | %7.1f |\n",
+	  printf("|%4d | %5d%c| %8.2f | %8d | %8d | %8d | %8d | %8.1f |",
 		 i, p_ad->nb_restart, (p_ad->total_cost == 0) ? ' ' : 'N', time_one,
 		 p_ad->nb_iter, p_ad->nb_local_min, p_ad->nb_swap,
 		 p_ad->nb_reset, nb_same_var_by_iter);
+	  if (user_stat_fct)
+	    printf(" %8d |", user_stat);
+	  printf("\n");
 
-	  if (disp_mode == 2 && p_ad->nb_restart > 0)
-	    printf("|     |       |         | %7d | %7d | %7d | %7d | %7.1f |\n",
-		   p_ad->nb_iter_tot, p_ad->nb_local_min_tot, p_ad->nb_swap_tot,
-		   p_ad->nb_reset_tot, nb_same_var_by_iter_tot);
+	  if (disp_mode == 2 && p_ad->nb_restart > 0) 
+	    {
+	      printf("|     |       |          | %8d | %8d | %8d | %8d | %8.1f |",
+		     p_ad->nb_iter_tot, p_ad->nb_local_min_tot, p_ad->nb_swap_tot,
+		     p_ad->nb_reset_tot, nb_same_var_by_iter_tot);
+	      if (user_stat_fct)
+		printf("          |");
+	      printf("\n");
+	    }
 
 	  printf("%s", buff);
 
-	  printf("| avg | %5d | %7.2f | %7d | %7d | %7d | %7d | %7.1f |\n",
+	  printf("| avg | %5d | %8.2f | %8d | %8d | %8d | %8d | %8.1f |",
 		 nb_restart_cum / i, time_cum / i,
 		 nb_iter_cum / i, nb_local_min_cum / i, nb_swap_cum / i,
 		 nb_reset_cum / i, nb_same_var_by_iter_cum / i);
+	  if (user_stat_fct)
+	    printf(" %8.2f |", (double) user_stat_cum / i);
+	  printf("\n");
 
-	  if (disp_mode == 2 && nb_restart_cum > 0)
-	    printf("|     |       |         | %7d | %7d | %7d | %7d | %7.1f |\n",
-		   nb_iter_tot_cum / i, nb_local_min_tot_cum / i, nb_swap_tot_cum / i,
-		   nb_reset_tot_cum / i, nb_same_var_by_iter_tot_cum / i);
 
+	  if (disp_mode == 2 && nb_restart_cum > 0) 
+	    {
+	      printf("|     |       |          | %8d | %8d | %8d | %8d | %8.1f |",
+		     nb_iter_tot_cum / i, nb_local_min_tot_cum / i, nb_swap_tot_cum / i,
+		     nb_reset_tot_cum / i, nb_same_var_by_iter_tot_cum / i);
+	      if (user_stat_fct)
+		printf("          |");
+	      printf("\n");
+	    }
 	  break;
 
 	case 1:			/* only total (restart + last iter) counters */
-	  printf("|%4d | %5d%c| %7.2f | %7d | %7d | %7d | %7d | %7.1f |\n",
+	  printf("|%4d | %5d%c| %8.2f | %8d | %8d | %8d | %8d | %8.1f |",
 		 i, p_ad->nb_restart, (p_ad->total_cost == 0) ? ' ' : 'N', time_one,
 		 p_ad->nb_iter_tot, p_ad->nb_local_min_tot, p_ad->nb_swap_tot,
 		 p_ad->nb_reset_tot, nb_same_var_by_iter_tot);
+	  if (user_stat_fct)
+	    printf(" %8d |", user_stat);
+	  printf("\n");
 
 	  printf("%s", buff);
 
-	  printf("| avg | %5d | %7.2f | %7d | %7d | %7d | %7d | %7.1f |\n",
+	  printf("| avg | %5d | %8.2f | %8d | %8d | %8d | %8d | %8.1f |",
 		 nb_restart_cum / i, time_cum / i,
 		 nb_iter_tot_cum / i, nb_local_min_tot_cum / i, nb_swap_tot_cum / i,
 		 nb_reset_tot_cum / i, nb_same_var_by_iter_tot_cum / i);
+	  if (user_stat_fct)
+	    printf(" %8.2f |", (double) user_stat_cum / i);
+	  printf("\n");
 	  break;
 	}
     }
@@ -344,15 +404,22 @@ main(int argc, char *argv[])
   if (count <= 0)
     return 0;
 
-  printf("| min | %5d | %7.2f | %7d | %7d | %7d | %7d | %7.1f |\n",
+  printf("| min | %5d | %8.2f | %8d | %8d | %8d | %8d | %8.1f |",
 	 nb_restart_min, time_min,
 	 nb_iter_tot_min, nb_local_min_tot_min, nb_swap_tot_min,
 	 nb_reset_tot_min, nb_same_var_by_iter_tot_min);
+  if (user_stat_fct)
+    printf(" %8d |", user_stat_min);
+  printf("\n");
 
-  printf("| max | %5d | %7.2f | %7d | %7d | %7d | %7d | %7.1f |\n",
+  printf("| max | %5d | %8.2f | %8d | %8d | %8d | %8d | %8.1f |",
 	 nb_restart_max, time_max,
 	 nb_iter_tot_max, nb_local_min_tot_max, nb_swap_tot_max,
 	 nb_reset_tot_max, nb_same_var_by_iter_tot_max);
+  if (user_stat_fct)
+    printf(" %8d |", user_stat_max);
+  printf("\n");
+
 
 
 
@@ -371,7 +438,7 @@ Set_Initial(AdData *p_ad)
       break;
 
     case 1:
-      printf("enter the initial solution:\n");
+      printf("enter the initial configuration:\n");
       for(i = 0; i < p_ad->size; i++)
 	if (scanf("%d", &p_ad->sol[i])) /* avoid gcc warning warn_unused_result */
 	  {}
@@ -438,6 +505,7 @@ Verify_Sol(AdData *p_ad)
 static void
 Parse_Cmd_Line(int argc, char *argv[], AdData *p_ad)
 {
+  int param_read = 0;
   int i;
 
   nb_threads = 1;
@@ -605,11 +673,13 @@ Parse_Cmd_Line(int argc, char *argv[], AdData *p_ad)
 
 	    case 'h':
 	      fprintf(stderr, "Usage: %s [ OPTION ]", argv[0]);
-	      if (param_needed)
+	      if (param_needed > 0)
 		fprintf(stderr, " PARAM");
+	      else if (param_needed < 0)
+		fprintf(stderr, " FILE");
 
 	      L("");
-	      L("   -i          read initial position");
+	      L("   -i          read initial configuration");
 	      L("   -D LEVEL    set debug mode (0=debug info, 1=step-by-step)");
 	      L("   -L FILE     use file as log file");
 	      L("   -c          check if the solution is valid");
@@ -640,8 +710,17 @@ Parse_Cmd_Line(int argc, char *argv[], AdData *p_ad)
 	      exit(1);
 	    }
 	}
-      if (param_needed)
-	p_ad->param = atoi(argv[i]);
+
+      if (param_needed > 0 && !param_read)
+	{
+	  p_ad->param = atoi(argv[i]);
+	  param_read = 1;
+	}
+      else if (param_needed < 0 && !param_read)
+	{
+	  strcpy(p_ad->param_file, argv[i]);
+	  param_read = 1;
+	}
       else
 	{
 	  fprintf(stderr, "unrecognized argument %s (-h for a help)\n", argv[i]);
@@ -649,12 +728,19 @@ Parse_Cmd_Line(int argc, char *argv[], AdData *p_ad)
 	}
     }
 
-  if (param_needed && p_ad->param < 0)
+  if (param_needed > 0 && !param_read)
     {
-      printf("param :");
-      if (scanf("%d", &p_ad->param))	/* avoid gcc warning warn_unused_result */
-	{}
+      printf("param: ");
+      No_Gcc_Warn_Unused_Result(scanf("%d", &p_ad->param));
       getchar();		/* get the last \n */
+    } 
+  else if (param_needed < 0 && !param_read)
+    {
+      printf("file: ");
+      No_Gcc_Warn_Unused_Result(fgets(p_ad->param_file, sizeof(p_ad->param_file), stdin));
+      int l = strlen(p_ad->param_file);
+      if (--l >= 0 && p_ad->param_file[l] == '\n')
+	p_ad->param_file[l] = '\0';
     }
 }
 

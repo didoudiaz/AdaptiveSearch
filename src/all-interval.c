@@ -1,9 +1,9 @@
 /*
  *  Adaptive search
  *
- *  Copyright (C) 2002-2010 Daniel Diaz, Philippe Codognet and Salvador Abreu
+ *  Copyright (C) 2002-2011 Daniel Diaz, Philippe Codognet and Salvador Abreu
  *
- *  interval.c: the all-interval series problem
+ *  all-interval.c: the all-interval series problem
  */
 
 #include <stdio.h>
@@ -16,6 +16,11 @@
 #if 0
 #define SLOW
 #endif
+
+#if 1
+#define NO_TRIVIAL		/* define it to reduce de number of trivial sols */
+#endif
+
 
 /*-----------*
  * Constants *
@@ -45,6 +50,12 @@ static int *nb_occ;		/* nb occurrences (to compute total cost) 0 is unused */
 /*
  *  MODELING
  */
+
+static int
+Is_Trivial_Solution(int *sol, int size)
+{
+  return (sol[0] == 0 || sol[0] == size - 1 || sol[size - 1] == 0 || sol[size - 1] == size - 1);
+}
 
 
 /*
@@ -130,6 +141,11 @@ Cost_Of_Solution(int should_be_recorded)
   for(i = 0; i < size - 1; i++)
     nb_occ[abs(sol[i] - sol[i + 1])]++;
 
+#ifdef NO_TRIVIAL
+  if (Is_Trivial_Solution(sol, size))
+    return size;
+#endif
+
   return Cost(nb_occ);
 }
 
@@ -148,6 +164,13 @@ Cost_If_Swap(int current_cost, int i1, int i2)
   int s1, s2;
   int rem1, rem2, rem3, rem4;
   int add1, add2, add3, add4;
+
+#ifdef NO_TRIVIAL
+  if ((i1 == 0 && (sol[i2] == 0 || sol[i2] == size - 1)) ||
+      (i2 == 0 && (sol[i1] == 0 || sol[i1] == size - 1)))
+    return size;
+#endif
+
 				/* we know i1 < i2 due to ad.exhaustive */
 				/* else uncomment this */
 #if 0
@@ -253,9 +276,43 @@ Executed_Swap(int i1, int i2)
 }
 
 
+/*
+ *  RESET
+ *
+ * Performs a reset (returns the new cost or -1 if unknown)
+ */
 
+//#ifdef NO_TRIVIAL  // not defining Reset() is slower but produces a bit less trivial sols
+int
+Reset(int n, AdData *p_ad)
+{
+  int dist_min = size - 3;	/* size - 1 also works pretty well */
+  int i, j;
+      
+  for(i = 1; i < size; i++)
+    {
+      if (abs(sol[i - 1] - sol[i]) >= dist_min)
+	{
+	  j = Random(size);
+	  Ad_Swap(i, j);
+	}
+    }
+  return -1;
+
+}
+//#endif
+
+
+
+int
+Trivial_Statistics(AdData *p_ad)
+{
+  return Is_Trivial_Solution(p_ad->sol, p_ad->size);
+}
 
 int param_needed = 1;		/* overwrite var of main.c */
+char *user_stat_name = "trivial";
+int (*user_stat_fct)(AdData *p_ad) = Trivial_Statistics;
 
 /*
  *  INIT_PARAMETERS
@@ -313,7 +370,7 @@ Check_Solution(AdData *p_ad)
 
   if (nb_occ == NULL)
     {
-      nb_occ = (int *) malloc(size * sizeof(int));
+      nb_occ = (int *) malloc(p_ad->size * sizeof(int));
       if (nb_occ == NULL)
 	{
 	  printf("%s:%d malloc failed\n", __FILE__, __LINE__);

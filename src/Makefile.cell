@@ -3,8 +3,6 @@ CELL_TOP = $(HOME)/cell/sdk
 DIRS := spu
 
 BENCHES = $(EXECS)
-COMM = -UCELL_COMM
-
 
 DEBUG = 0
 BENCH = partit
@@ -15,7 +13,6 @@ IMPORTS = spu/$(BENCH).a -lspe2 -lpthread
 CC_OPT_LEVEL = -g
 
 CFLAGS += -DBENCH_SPU=$(BENCH)
-CFLAGS += $(COMM)
 CFLAGS += -DCELL=1 -DAS_PPU=1 -UAS_SPU
 CFLAGS += -DDEBUG=$(DEBUG)
 CFLAGS += -Wno-unused-parameter
