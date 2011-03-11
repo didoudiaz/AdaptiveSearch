@@ -1,11 +1,12 @@
 /LocalStuff
 /src/LocalStuff
 /src/OLD_CODE
+/src/OLD
 /src/CodeQAP
-/*.o
-/*.a
-/?.c
-/?
+*.o
+*.a
+?.c
+?
 /src/*.tar.gz
 /src/all-interval
 /src/alpha

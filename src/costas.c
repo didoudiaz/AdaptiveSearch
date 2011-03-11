@@ -37,8 +37,10 @@ static int size_sq;		/* size * size */
 
 static int size_bytes;		/* size * sizeof(int) */
 
-static int *nb_occ;		/* nb occurrences of each distance -(size -1)..-1 1..size-1 (0 is unused) */
-static int *first;		/* records the indice of a first occurence of a distance */
+static int *nb_occ;		/* nb occurrences of each diff (translated) */
+                                /* diff are in -(size-1)..-1 1..size-1 */
+                                /* translated are in 0..2*size-1 [0] and [N] being unused */
+static int *first;		/* records the indice of a first occurence of a (translated) difference */
 static int *err;		/* errors on variables */
 
 
