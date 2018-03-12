@@ -60,8 +60,9 @@ static PbData pb[] =
     {  19, 23, 228, {2,7,9,10,15,16,17,18,22,23,25,28,36,39,42,56,57,68,69,72,73,87,99} }, // pb #2
     {  41, 24, 326, {1,6,10,11,14,15,18,24,29,32,43,44,53,56,63,65,71,80,83,101,104,106,119,142} }, // pb #3
     {  47, 24, 479, {5,6,17,23,24,26,28,29,35,43,44,52,60,68,77,86,130,140,150,155,160,164,174,175} }, // pb #4
-    { 154, 25, 524, {9,12,20,21,33,35,37,39,54,55,61,62,87,90,98,101,125,132,135,141,145,159,163,164,220} } // pb #5
-  };
+    { 154, 25, 524, {9,12,20,21,33,35,37,39,54,55,61,62,87,90,98,101,125,132,135,141,145,159,163,164,220} }, // pb #5
+    {  48, 25, 147, {3,4,5,6,8,9,10,12,13,14,15,16,17,19,20,23,25,27,32,33,34,40,41,73,74} } // pb #6 - super hard
+ };
 
 static int nb_pb = sizeof(pb) / sizeof(pb[0]);
 static int pb_no;
@@ -120,6 +121,7 @@ Solve(AdData *p_ad)
 }
 
 
+/* return the no of square that cannot be placed (or size if all are placed) */
 
 static __inline__
 int Place_Squares(int *sol, int size, int master_square_size, char **ascii_repres)
@@ -166,7 +168,8 @@ int Place_Squares(int *sol, int size, int master_square_size, char **ascii_repre
 	  int x, y;
 	  for(x = x_pos; x < x_pos + sz; x++)
 	    for(y = y_pos; y < y_pos + sz; y++)
-	      ascii_repres[x][y] = 'A' - 1 + sol[i];
+	      //	      ascii_repres[x][y] = 'A' - 1 + sol[i];
+	      ascii_repres[x][y] = 'A' + i;
 	}
 
 
@@ -195,7 +198,7 @@ int Place_Squares(int *sol, int size, int master_square_size, char **ascii_repre
 #endif      
     }
 
-  return i;
+  return i;			/* here i == size: all squares are placed */
 }
 
 
@@ -204,8 +207,6 @@ int Place_Squares(int *sol, int size, int master_square_size, char **ascii_repre
  *
  *  Returns the total cost of the current solution.
  */
-
-int first_i;
 
 int
 Cost_Of_Solution(int should_be_recorded)
@@ -231,9 +232,6 @@ Cost_Of_Solution(int should_be_recorded)
   
   i = Place_Squares(sol, size, master_square_size, NULL);
 
-  if (should_be_recorded)
-    first_i = i;
-  
   int nb_missing_sq = size - i;
   int nb_empty_rect = 0;
   int max_height = 0;
@@ -348,7 +346,6 @@ Cost_Of_Solution(int should_be_recorded)
 
 
 
-
 int param_needed = 1;		/* overwrite var of main.c */
 
 /*
@@ -413,8 +410,17 @@ Check_Solution(AdData *p_ad)
 {
   int pb_no = p_ad->param;
   int master_square_size = pb[pb_no].master_square_size;
-  int i = Place_Squares(p_ad->sol, p_ad->size, master_square_size, NULL);
  
+  int i = Random_Permut_Check(p_ad->sol, p_ad->size, p_ad->actual_value, p_ad->base_value);
+
+  if (i >= 0)
+    {
+      printf("ERROR: not a valid permutation, error at [%d] = %d\n", i, p_ad->sol[i]);
+      return 0;
+    }
+
+  i = Place_Squares(p_ad->sol, p_ad->size, master_square_size, NULL);
+
   if (i >= size)
     return 1;
 
@@ -438,6 +444,7 @@ Check_Solution(AdData *p_ad)
 void
 Display_Solution(AdData *p_ad)
 {
+  int *sol = p_ad->sol;
   int i;
 
   printf("square sizes:");

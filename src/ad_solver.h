@@ -51,6 +51,9 @@ typedef struct
   int restart_limit;		/* nb of iterations before restart */
   int restart_max;		/* max nb of times to restart (to retry) */
   int reinit_after_if_swap;	/* true if Cost_Of_Solution must be called twice */
+  int optim_pb;			/* optimization pb ? if yes save the best solution when found */
+  int target_cost;		/* target cost to reach (either exactly or better) */
+  int target_exact;		/* 0 means stop when a cost is <= target_cost, 1 means == */
 
 				/* --- input / output: solution --- */
 
@@ -128,6 +131,10 @@ void Ad_Display(int *t, AdData *p_ad, unsigned *mark);
 
 							/* functions provided by the user */
 
+void Set_Init_Configuration(AdData *p_ad); 		/* optional else use Random_Permut  */
+
+void Check_Init_Configuration(AdData *p_ad); 		/* optional */
+
 int Cost_Of_Solution(int should_be_recorded);		/* mandatory */
 
 int Cost_On_Variable(int i);				/* optional else exhaustive search */
@@ -138,12 +145,17 @@ void Executed_Swap(int i, int j); 			/* optional else use Cost_Of_Solution */
 
 int Next_I(int i);					/* optional else from 0 to p_ad->size-1 */
 
-int Next_J(int i, int j);				/* optional else from i+1 to p_ad->size-1 */
+int Next_J(int i, int j, int exhaustive);		/* optional else from i+1 to p_ad->size-1 */
 
 int Reset(int nb_to_reset, AdData *p_ad);		/* optional else random reset */
 
 void Display_Solution(AdData *p_ad);			/* optional else basic display */
 
+
+
+#define TARGET_REACHED(p) \
+  (((p)->total_cost == (p)->target_cost) || \
+   ((p)->total_cost <  (p)->target_cost && !(p)->target_exact))
 
 
 

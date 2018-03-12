@@ -22,12 +22,12 @@ RANLIB=ranlib
 
 
 OBJLIB = ad_solver.o tools.o main.o \
-	 no_cost_var.o no_exec_swap.o no_cost_swap.o \
+	 no_init_config.o no_cost_var.o no_exec_swap.o no_cost_swap.o \
 	 no_next_i.o no_next_j.o no_displ_sol.o no_reset.o
 
 LIBNAME=libad_solver.a
 
-EXECS=magic-square queens alpha all-interval partit langford perfect-square costas qap
+EXECS=magic-square queens alpha all-interval partit langford langford3 skolem skolem3 perfect-square costas qap smti
 
 %: %.c $(LIBNAME)
 	$(CC) -o $@ $(CFLAGS) $< $(LIBNAME) -lm
@@ -54,11 +54,17 @@ ad_solver.o: ad_solver.h
 
 tools.o: tools.h
 
+langford3: langford.c
+skolem: langford.c
+skolem3: langford.c
+
+smti: smti-utils.c
+
+qap: qap-utils.c
 
 # distribution
 
 ROOT_DIR=$(shell cd ..;pwd)
-DST=./$(PKG_NAME)
 
 distdir=/tmp
 distpath=$(distdir)/$(PKG_NAME)

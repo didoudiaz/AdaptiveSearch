@@ -164,7 +164,7 @@ unsigned
 Randomize(void)
 {
   static int count = 0;
-  unsigned seed;
+  unsigned seed = 0;
   int seed_found = 0;
 #if defined(__unix__)
   {
@@ -341,14 +341,17 @@ Random_Permut(int *vec, int size, const int *actual_value, int base_value)
  *
  *  Repair a vector of size elements containing a random permutation 
  *  - of values in base_value..base_value+size-1 (if actual_value == NULL)
- *  - of values in actual_value[] + base_value
+ *  - of values in actual_value[] + base_value. 
+ *
+ *  It is allowed to have duplicates elements in actual_value BUT 
+ *  THEY MUST be consecutive in the actual_value array (sort it if needed).
  *
  *  All erroneous elements are first marked (bit just before the sign bit) 
  *  and then fixed.
  *
  *  To have no problem with negative numbers (base_value < 0 and/or
  *  negative values un actual_value[]) the repair of the permutation
- *  is done in 0..size-1
+ *  is done in 0..size-1.
  *  
  *  To ensure the permutation we mark each random generated integer
  *  (in 0..size-1) in vec setting the bit sign.
@@ -357,7 +360,7 @@ Random_Permut(int *vec, int size, const int *actual_value, int base_value)
  *  another random number is tried. It is possible to bound the search
  *  setting the macro PERMUT_MAX_TRIES to the max number of tries
  *  for each index (e.g. a constant 1000 or 'size' or 'size * size')
- *  Experiments shows that it is better to not set a bound.
+ *  Experiments show that it is better to not set a bound.
  *
  *  At the end, all sign+error bits are reset and the permutation is 
  *  translated to base_value..base_value+size-1 or to actual_value[]+base_value

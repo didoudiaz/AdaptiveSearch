@@ -40,7 +40,7 @@ typedef struct
  * Global variables *
  *------------------*/
 
-static AdData ad ALIGN;		/* copy of the passed *p_ad (help optim ?) */
+static AdData *p_ad ALIGN;	/* copy of the passed p_ad */
 
 static int max_i ALIGN;		/* swap var 1: max projected cost (err_var[])*/
 static int min_j ALIGN;		/* swap var 2: min conflict (swap[])*/
@@ -69,13 +69,13 @@ static FILE *f_log;		/* log file */
 #endif
 
 
-//#define BASE_MARK    ((unsigned) ad.nb_iter)
-#define BASE_MARK    ((unsigned) ad.nb_swap)
+//#define BASE_MARK    ((unsigned) p_ad->nb_iter)
+#define BASE_MARK    ((unsigned) p_ad->nb_swap)
 #define Mark(i, k)   mark[i] = BASE_MARK + (k)
 #define UnMark(i)    mark[i] = 0
 #define Marked(i)    (BASE_MARK + 1 <= mark[i])
 
-#define USE_PROB_SELECT_LOC_MIN ((unsigned) ad.prob_select_loc_min <= 100)
+#define USE_PROB_SELECT_LOC_MIN ((unsigned) p_ad->prob_select_loc_min <= 100)
 
 
 
@@ -108,8 +108,8 @@ Error_All_Marked()
   int i;
 
   printf("\niter: %d - all variables are marked wrt base mark: %d\n",
-	 ad.nb_iter, BASE_MARK);
-  for (i = 0; i < ad.size; i++)
+	 p_ad->nb_iter, BASE_MARK);
+  for (i = 0; i < p_ad->size; i++)
     printf("M(%d)=%d  ", i, mark[i]);
   printf("\n");
   exit(1);
@@ -144,8 +144,9 @@ Select_Var_High_Cost(void)
   list_i_nb = 0;
   max = 0;
   nb_var_marked = 0;
-
-  for(i = 0; i < ad.size; i++)
+  
+  i = -1;
+  while((unsigned) (i = Next_I(i)) < (unsigned) p_ad->size) // false if i < 0
     {
       if (Marked(i))
 	{
@@ -179,7 +180,7 @@ Select_Var_High_Cost(void)
     Error_All_Marked();
 #endif
 
-  ad.nb_same_var += list_i_nb;
+  p_ad->nb_same_var += list_i_nb;
   x = Random(list_i_nb);
   max_i = list_i[x];
 }
@@ -200,12 +201,13 @@ Select_Var_Min_Conflict(void)
 
  a:
   list_j_nb = 0;
-  new_cost = ad.total_cost;
+  new_cost = p_ad->total_cost;
 
-  for(j = 0; j < ad.size; j++)
+  j = -1;
+  while((unsigned) (j = Next_J(max_i, j, 0)) < (unsigned) p_ad->size) // false if j < 0
     {
 #if defined(DEBUG) && (DEBUG&1)
-      swap[j] = Cost_If_Swap(ad.total_cost, j, max_i);
+      swap[j] = Cost_If_Swap(p_ad->total_cost, j, max_i);
 #endif
 
 #ifndef IGNORE_MARK_IF_BEST
@@ -213,7 +215,10 @@ Select_Var_Min_Conflict(void)
 	continue;
 #endif
 
-      x = Cost_If_Swap(ad.total_cost, j, max_i);
+      x = (max_i == j) ? p_ad->total_cost : Cost_If_Swap(p_ad->total_cost, j, max_i);
+      /*
+      printf("SWAPPING %d <=> %d (%d <=> %d) cost: %d => %d\n", j, max_i, p_ad->sol[j], p_ad->sol[max_i], p_ad->total_cost, x); 
+      */
 
 #ifdef IGNORE_MARK_IF_BEST
       if (Marked(j) && x >= best_cost)
@@ -229,7 +234,7 @@ Select_Var_Min_Conflict(void)
 	    {
 	      list_j_nb = 0;
 	      new_cost = x;
-	      if (ad.first_best)
+	      if (p_ad->first_best)
 		{
 		  min_j = list_j[list_j_nb++] = j;
 		  return;         
@@ -242,8 +247,8 @@ Select_Var_Min_Conflict(void)
 
   if (USE_PROB_SELECT_LOC_MIN)
     {
-      if (new_cost >= ad.total_cost && 
-	  (Random(100) < (unsigned) ad.prob_select_loc_min ||
+      if (new_cost >= p_ad->total_cost && 
+	  (Random(100) < (unsigned) p_ad->prob_select_loc_min ||
 	   (list_i_nb <= 1 && list_j_nb <= 1)))
 	{
 	  min_j = max_i;
@@ -256,7 +261,7 @@ Select_Var_Min_Conflict(void)
 	  min_j = -1;
 	  return;
 #else
-	  ad.nb_iter++;
+	  p_ad->nb_iter++;
 	  x = Random(list_i_nb);
 	  max_i = list_i[x];
 	  goto a;
@@ -288,7 +293,7 @@ Select_Vars_To_Swap(void)
   nb_var_marked = 0;
 
   i = -1;
-  while((unsigned) (i = Next_I(i)) < (unsigned) ad.size) // false if i < 0
+  while((unsigned) (i = Next_I(i)) < (unsigned) p_ad->size) // false if i < 0
     {
       if (Marked(i))
 	{
@@ -298,13 +303,15 @@ Select_Vars_To_Swap(void)
 #endif
 	}
       j = -1;
-      while((unsigned) (j = Next_J(i, j)) < (unsigned) ad.size) // false if j < 0
+      while((unsigned) (j = Next_J(i, j, i + 1)) < (unsigned) p_ad->size) // false if j < 0
 	{
 #ifndef IGNORE_MARK_IF_BEST
 	  if (Marked(j))
 	    continue;
 #endif
-	  x = Cost_If_Swap(ad.total_cost, i, j);
+	  //	  printf("SWAP %d <-> %d\n", i, j);
+	  x = Cost_If_Swap(p_ad->total_cost, i, j);
+	  //	  printf("cost = %d\n", x);
 
 #ifdef IGNORE_MARK_IF_BEST
 	  if (Marked(j) && x >= best_cost)
@@ -317,7 +324,7 @@ Select_Vars_To_Swap(void)
 		{
 		  new_cost = x;
 		  list_ij_nb = 0;
-		  if (ad.first_best == 1 && x < ad.total_cost)
+		  if (p_ad->first_best == 1 && x < p_ad->total_cost)
 		    {
 		      max_i = i;
 		      min_j = j;
@@ -326,27 +333,31 @@ Select_Vars_To_Swap(void)
 		}
 	      list_ij[list_ij_nb].i = i;
 	      list_ij[list_ij_nb].j = j;
-	      list_ij_nb = (list_ij_nb + 1) % ad.size;
+#if 0
+	      if (list_ij_nb == p_ad->size - 1)
+		printf("TRUNCATED !!!");
+#endif
+	      list_ij_nb = (list_ij_nb + 1) % p_ad->size;
 	    }
 	}
     }
 
-  ad.nb_same_var += list_ij_nb;
+  p_ad->nb_same_var += list_ij_nb;
 
 #if 0
-  if (new_cost >= ad.total_cost)
-    printf("   *** LOCAL MIN ***  iter: %d  next cost:%d >= total cost:%d #candidates: %d\n", ad.nb_iter, new_cost, ad.total_cost, list_ij_nb);
+  if (new_cost >= p_ad->total_cost)
+    printf("   *** LOCAL MIN ***  iter: %d  next cost:%d >= total cost:%d #candidates: %d\n", p_ad->nb_iter, new_cost, p_ad->total_cost, list_ij_nb);
 #endif
 
-  if (new_cost >= ad.total_cost)
+  if (new_cost >= p_ad->total_cost)
     {
       if (list_ij_nb == 0 || 
-	  (USE_PROB_SELECT_LOC_MIN && Random(100) < (unsigned) ad.prob_select_loc_min))
+	  (USE_PROB_SELECT_LOC_MIN && Random(100) < (unsigned) p_ad->prob_select_loc_min))
 	{
 	  for(i = 0; Marked(i); i++)
 	    {
 #if defined(DEBUG) && (DEBUG&1)
-	      if (i > ad.size)
+	      if (i > p_ad->size)
 		Error_All_Marked();
 #endif
 	    }
@@ -354,7 +365,7 @@ Select_Vars_To_Swap(void)
 	  goto end;
 	}
 
-      if (!USE_PROB_SELECT_LOC_MIN && (x = Random(list_ij_nb + ad.size)) < ad.size)
+      if (!USE_PROB_SELECT_LOC_MIN && (x = Random(list_ij_nb + p_ad->size)) < p_ad->size)
 	{
 	  max_i = min_j = x;
 	  goto end;
@@ -386,10 +397,10 @@ Ad_Swap(int i, int j)
 {
   int x;
 
-  ad.nb_swap++;
-  x = ad.sol[i];
-  ad.sol[i] = ad.sol[j];
-  ad.sol[j] = x;
+  p_ad->nb_swap++;
+  x = p_ad->sol[i];
+  p_ad->sol[i] = p_ad->sol[j];
+  p_ad->sol[j] = x;
 }
 
 
@@ -399,17 +410,21 @@ static void
 Do_Reset(int n)
 {
 #if defined(DEBUG) && (DEBUG&1)
-  if (ad.debug)
+  if (p_ad->debug)
     printf(" * * * * * * RESET n=%d\n", n);
 #endif
 
-  int cost = Reset(n, &ad);
+#ifdef TRACE
+  printf(" * * * * * * RESET n=%d\n", n);
+#endif
+
+  int cost = Reset(n, p_ad);
 
 #if UNMARK_AT_RESET == 2
-  memset(mark, 0, ad.size * sizeof(unsigned));
+  memset(mark, 0, p_ad->size * sizeof(unsigned));
 #endif
-  ad.nb_reset++;
-  ad.total_cost = (cost < 0) ? Cost_Of_Solution(1) : cost;
+  p_ad->nb_reset++;
+  p_ad->total_cost = (cost < 0) ? Cost_Of_Solution(1) : cost;
 }
 
 
@@ -434,41 +449,41 @@ Do_Reset(int n)
 
 
 /*
- *  SOLVE
+ *  AD_SOLVE
  *
  *  General solve function.
  *  returns the final total_cost (0 on success)
  */
 int
-Ad_Solve(AdData *p_ad)
+Ad_Solve(AdData *p_ad0)
 {
   int nb_in_plateau;
 
-  ad = *p_ad;	   /* does this help gcc optim (put some fields in regs) ? */
+  p_ad = p_ad0;
 
-  ad_sol = ad.sol; /* copy of p_ad->sol and p_ad->reinit_after_if_swap (used by no_cost_swap) */
+  ad_sol = p_ad->sol; /* copy of p_ad->sol and p_ad->reinit_after_if_swap (used by no_cost_swap) */
   ad_reinit_after_if_swap = p_ad->reinit_after_if_swap;
 
 
   if (ad_no_cost_var_fct)
-    ad.exhaustive = 1;
+    p_ad->exhaustive = 1;
 
 
-  mark = (unsigned *) malloc(ad.size * sizeof(unsigned));
-  if (ad.exhaustive <= 0)
+  mark = (unsigned *) malloc(p_ad->size * sizeof(unsigned));
+  if (p_ad->exhaustive <= 0)
     {
-      list_i = (int *) malloc(ad.size * sizeof(int));
-      list_j = (int *) malloc(ad.size * sizeof(int));
+      list_i = (int *) malloc(p_ad->size * sizeof(int));
+      list_j = (int *) malloc(p_ad->size * sizeof(int));
     }
   else
-    list_ij = (Pair *) malloc(ad.size * sizeof(Pair)); // to run on Cell limit to ad.size instead of ad.size*ad.size
+    list_ij = (Pair *) malloc(p_ad->size * sizeof(Pair)); // to run on Cell limit to p_ad->size instead of p_ad->size*p_ad->size
 
 #if defined(DEBUG) && (DEBUG&1)
-  err_var = (int *) malloc(ad.size * sizeof(int));
-  swap = (int *) malloc(ad.size * sizeof(int));
+  err_var = (int *) malloc(p_ad->size * sizeof(int));
+  swap = (int *) malloc(p_ad->size * sizeof(int));
 #endif
 
-  if (mark == NULL || (!ad.exhaustive && (list_i == NULL || list_j == NULL)) || (ad.exhaustive && list_ij == NULL)
+  if (mark == NULL || (!p_ad->exhaustive && (list_i == NULL || list_j == NULL)) || (p_ad->exhaustive && list_ij == NULL)
 #if defined(DEBUG) && (DEBUG&1)
       || err_var == NULL || swap == NULL
 #endif
@@ -478,87 +493,101 @@ Ad_Solve(AdData *p_ad)
       exit(1);
     }
 
-  memset(mark, 0, ad.size * sizeof(unsigned)); /* init with 0 */
+  memset(mark, 0, p_ad->size * sizeof(unsigned)); /* init with 0 */
+
+  int overall_best_cost = BIG;	/* this one is the best cost across restarts (best of best) */
+  int *overall_best_sol = NULL;	/* this one is the best sol  across restarts (needed for optim_pb) */
+
+  if (p_ad->optim_pb)
+    {
+      overall_best_sol = (int *) malloc(p_ad->size * sizeof(int));
+      if (overall_best_sol == NULL)
+	{
+	  fprintf(stderr, "%s:%d: malloc failed\n", __FILE__, __LINE__);
+	  exit(1);
+	}
+      memcpy(overall_best_sol, p_ad->sol, p_ad->size * sizeof(int));      
+    }
 
 #ifdef LOG_FILE
   f_log = NULL;
-  if (ad.log_file)
-    if ((f_log = fopen(ad.log_file, "w")) == NULL)
-      perror(ad.log_file);
+  if (p_ad->log_file)
+    if ((f_log = fopen(p_ad->log_file, "w")) == NULL)
+      perror(p_ad->log_file);
 #endif
 
-  ad.nb_restart = -1;
+  p_ad->nb_restart = -1;
 
-  ad.nb_iter = 0;
-  ad.nb_swap = 0;
-  ad.nb_same_var = 0;
-  ad.nb_reset = 0;
-  ad.nb_local_min = 0;
+  p_ad->nb_iter = 0;
+  p_ad->nb_swap = 0;
+  p_ad->nb_same_var = 0;
+  p_ad->nb_reset = 0;
+  p_ad->nb_local_min = 0;
 
-  ad.nb_iter_tot = 0;
-  ad.nb_swap_tot = 0;
-  ad.nb_same_var_tot = 0;
-  ad.nb_reset_tot = 0;
-  ad.nb_local_min_tot = 0;
+  p_ad->nb_iter_tot = 0;
+  p_ad->nb_swap_tot = 0;
+  p_ad->nb_same_var_tot = 0;
+  p_ad->nb_reset_tot = 0;
+  p_ad->nb_local_min_tot = 0;
 
 #if defined(DEBUG) && (DEBUG&2)
-  if (ad.do_not_init)
+  if (p_ad->do_not_init)
     {
       printf("********* received data (do_not_init=1):\n");
-      Ad_Display(ad.sol, &ad, NULL);
+      Ad_Display(p_ad->sol, p_ad, NULL);
       printf("******************************-\n");
     }
 #endif
 
-  if (!ad.do_not_init)
+  if (!p_ad->do_not_init)
     {
     restart:
-      ad.nb_iter_tot += ad.nb_iter; 
-      ad.nb_swap_tot += ad.nb_swap; 
-      ad.nb_same_var_tot += ad.nb_same_var;
-      ad.nb_reset_tot += ad.nb_reset;
-      ad.nb_local_min_tot += ad.nb_local_min;
+      p_ad->nb_iter_tot += p_ad->nb_iter; 
+      p_ad->nb_swap_tot += p_ad->nb_swap; 
+      p_ad->nb_same_var_tot += p_ad->nb_same_var;
+      p_ad->nb_reset_tot += p_ad->nb_reset;
+      p_ad->nb_local_min_tot += p_ad->nb_local_min;
 
-      Random_Permut(ad.sol, ad.size, ad.actual_value, ad.base_value);
-      memset(mark, 0, ad.size * sizeof(unsigned)); /* init with 0 */
+      Set_Init_Configuration(p_ad);
+      memset(mark, 0, p_ad->size * sizeof(unsigned)); /* init with 0 */
     }
 
-  ad.nb_restart++;
-  ad.nb_iter = 0;
-  ad.nb_swap = 0;
-  ad.nb_same_var = 0;
-  ad.nb_reset = 0;
-  ad.nb_local_min = 0;
+  p_ad->nb_restart++;
+  p_ad->nb_iter = 0;
+  p_ad->nb_swap = 0;
+  p_ad->nb_same_var = 0;
+  p_ad->nb_reset = 0;
+  p_ad->nb_local_min = 0;
 
 
   nb_in_plateau = 0;
 
-  best_cost = ad.total_cost = Cost_Of_Solution(1);
-  int best_of_best = BIG;
+  best_cost = p_ad->total_cost = Cost_Of_Solution(1);
 
-
-  while(ad.total_cost)
+  while(!TARGET_REACHED(p_ad))
     {
-      if (best_cost < best_of_best)
+      //if (p_ad->total_cost < 3150000) 	printf("\nI found: %d\n\n", p_ad->total_cost);
+      if (p_ad->total_cost < overall_best_cost && p_ad->total_cost > p_ad->target_cost)
 	{
-	  best_of_best = best_cost;
-#if 0 //******************************
-	  printf("exec: %3d  iter: %10d  BEST %d (#locmin:%d  resets:%d)\n",  ad.nb_restart, ad.nb_iter, best_of_best, ad.nb_local_min, ad.nb_reset);
-	  Display_Solution(&ad);
-
+	  overall_best_cost = p_ad->total_cost;
+#if 0 //****************************** OPTIM problem
+	  printf("exec: %3d  iter: %10d  BEST %d (#locmin:%d  resets:%d)\n",  p_ad->nb_restart, p_ad->nb_iter, overall_best_cost, p_ad->nb_local_min, p_ad->nb_reset);
+	  Display_Solution(p_ad);
 #endif
+	  if (overall_best_sol)
+	    memcpy(overall_best_sol, p_ad->sol, p_ad->size * sizeof(int));      
 	}
 
-      ad.nb_iter++;
+      p_ad->nb_iter++;
 
-      if (ad.nb_iter >= ad.restart_limit)
+      if (p_ad->nb_iter >= p_ad->restart_limit)
 	{
-	  if (ad.nb_restart < ad.restart_max)
+	  if (p_ad->nb_restart < p_ad->restart_max)
 	    goto restart;
 	  break;
 	}
 
-      if (!ad.exhaustive)
+      if (!p_ad->exhaustive)
 	{
 	  Select_Var_High_Cost();
 	  Select_Var_Min_Conflict();
@@ -569,18 +598,24 @@ Ad_Solve(AdData *p_ad)
 	}
 
       Emit_Log("----- iter no: %d, cost: %d, nb marked: %d ---",
-	       ad.nb_iter, ad.total_cost, nb_var_marked);
+	       p_ad->nb_iter, p_ad->total_cost, nb_var_marked);
+      /*
+	printf("----- iter no: %d, cost: %d, nb marked: %d --- swap: %d/%d  nb pairs: %d  new cost: %d\n", 
+	p_ad->nb_iter, p_ad->total_cost, nb_var_marked,
+	max_i, min_j, list_ij_nb, new_cost);
+      */
+      /* Display_Solution(p_ad); */
 
 #ifdef TRACE
       printf("----- iter no: %d, cost: %d, nb marked: %d --- swap: %d/%d  nb pairs: %d  new cost: %d\n", 
-             ad.nb_iter, ad.total_cost, nb_var_marked,
+             p_ad->nb_iter, p_ad->total_cost, nb_var_marked,
              max_i, min_j, list_ij_nb, new_cost);
 #endif
 #ifdef TRACE
       Display_Solution(p_ad);
 #endif
 
-      if (ad.total_cost != new_cost)
+      if (p_ad->total_cost != new_cost)
 	{
 	  if (nb_in_plateau > 1)
 	    {
@@ -595,7 +630,7 @@ Ad_Solve(AdData *p_ad)
 	}
 
 
-      if (!ad.exhaustive)
+      if (!p_ad->exhaustive)
 	{
 	  Emit_Log("\tswap: %d/%d  nb max/min: %d/%d  new cost: %d",
 		   max_i, min_j, list_i_nb, list_j_nb, new_cost);
@@ -608,15 +643,15 @@ Ad_Solve(AdData *p_ad)
 
 
 #if defined(DEBUG) && (DEBUG&1)
-      if (ad.debug)
+      if (p_ad->debug)
 	Show_Debug_Info();
 #endif
 
 #if 0
-      if (new_cost >= ad.total_cost && nb_in_plateau > 15)
+      if (new_cost >= p_ad->total_cost && nb_in_plateau > 15)
 	{
 	  Emit_Log("\tTOO BIG PLATEAU - RESET");
-	  Do_Reset(ad.nb_var_to_reset);
+	  Do_Reset(p_ad->nb_var_to_reset);
 	}
 #endif
       nb_in_plateau++;
@@ -626,22 +661,29 @@ Ad_Solve(AdData *p_ad)
 
       if (max_i == min_j)
 	{
-	  ad.nb_local_min++;
-	  Mark(max_i, ad.freeze_loc_min);
+	  p_ad->nb_local_min++;
+	  Mark(max_i, p_ad->freeze_loc_min);
 
-	  if (nb_var_marked + 1 >= ad.reset_limit)
+	  if (nb_var_marked + 1 >= p_ad->reset_limit)
 	    {
 	      Emit_Log("\tTOO MANY FROZEN VARS - RESET");
-	      Do_Reset(ad.nb_var_to_reset);
+	      Do_Reset(p_ad->nb_var_to_reset);
 	    }
 	}
       else
 	{
-	  Mark(max_i, ad.freeze_swap);
-	  Mark(min_j, ad.freeze_swap);
+#if 1
+	  Mark(max_i, p_ad->freeze_swap);
+	  Mark(min_j, p_ad->freeze_swap);
+#else
+	  if (Random_Double() < 0.5)
+	    Mark(max_i, p_ad->freeze_swap);
+	  else
+	    Mark(min_j, p_ad->freeze_swap);
+#endif
 	  Ad_Swap(max_i, min_j);
+	  p_ad->total_cost = new_cost;
 	  Executed_Swap(max_i, min_j);
-	  ad.total_cost = new_cost;
 	}
     }
 
@@ -652,7 +694,7 @@ Ad_Solve(AdData *p_ad)
 
   free(mark);
   free(list_i);
-  if (!ad.exhaustive)
+  if (!p_ad->exhaustive)
     free(list_j);
   else
     free(list_ij);
@@ -663,14 +705,22 @@ Ad_Solve(AdData *p_ad)
 #endif
 
 
-  ad.nb_iter_tot += ad.nb_iter; 
-  ad.nb_swap_tot += ad.nb_swap; 
-  ad.nb_same_var_tot += ad.nb_same_var;
-  ad.nb_reset_tot += ad.nb_reset;
-  ad.nb_local_min_tot += ad.nb_local_min;
+  if (overall_best_cost < p_ad->total_cost && overall_best_sol)
+    {
+      memcpy(p_ad->sol, overall_best_sol, p_ad->size * sizeof(int));
+      p_ad->total_cost = overall_best_cost;
+    }
 
-  *p_ad = ad;
-  return ad.total_cost;
+  if (overall_best_sol)
+    free(overall_best_sol);
+
+  p_ad->nb_iter_tot += p_ad->nb_iter; 
+  p_ad->nb_swap_tot += p_ad->nb_swap; 
+  p_ad->nb_same_var_tot += p_ad->nb_same_var;
+  p_ad->nb_reset_tot += p_ad->nb_reset;
+  p_ad->nb_local_min_tot += p_ad->nb_local_min;
+
+  return p_ad->total_cost;
 }
 
 
@@ -725,20 +775,20 @@ Show_Debug_Info(void)
 {
   char buff[100];
 
-  printf("\n--- debug info --- iteration no: %d  swap no: %d\n", ad.nb_iter, ad.nb_swap);
-  Ad_Display(ad.sol, &ad, mark);
+  printf("\n--- debug info --- iteration no: %d  swap no: %d\n", p_ad->nb_iter, p_ad->nb_swap);
+  Ad_Display(p_ad->sol, p_ad, mark);
   if (!ad_no_displ_sol_fct)
     {
       printf("user defined Display_Solution:\n");
-      Display_Solution(&ad);
+      Display_Solution(p_ad);
     }
-  printf("total_cost: %d\n\n", ad.total_cost);
-  if (!ad.exhaustive)
+  printf("total_cost: %d\n\n", p_ad->total_cost);
+  if (!p_ad->exhaustive)
     {
-      Ad_Display(err_var, &ad, mark);
+      Ad_Display(err_var, p_ad, mark);
       printf("chosen for max error: %d, error: %d\n\n",
 	     max_i, err_var[max_i]);
-      Ad_Display(swap, &ad, mark);
+      Ad_Display(swap, p_ad, mark);
       printf("chosen for min conflict: %d, cost: %d\n",
 	     min_j, swap[min_j]);
     }
@@ -749,9 +799,9 @@ Show_Debug_Info(void)
     }
 
   if (max_i == min_j)
-    printf("\nfreezing var %d for %d swaps\n", max_i, ad.freeze_loc_min);
+    printf("\nfreezing var %d for %d swaps\n", max_i, p_ad->freeze_loc_min);
 
-  if (ad.debug == 2)
+  if (p_ad->debug == 2)
     {
       printf("\nreturn: next step, c: continue (as with -d), s: stop debugging, q: quit: ");
       if (fgets(buff, sizeof(buff), stdin)) /* avoid gcc warning warn_unused_result */
@@ -759,10 +809,10 @@ Show_Debug_Info(void)
       switch(*buff)
 	{
 	case 'c':
-	  ad.debug = 1;
+	  p_ad->debug = 1;
 	  break;
 	case 's':
-	  ad.debug = 0;
+	  p_ad->debug = 0;
 	  break;
 	case 'q':
 	  exit(1);

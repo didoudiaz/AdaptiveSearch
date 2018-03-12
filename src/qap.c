@@ -51,7 +51,7 @@ static QAPMatrix delta;
  *  MODELING
  */
 
-
+static int exchange;
 
 /*
  *  SOLVE
@@ -67,10 +67,20 @@ Solve(AdData *p_ad)
 
   if (mat_A == NULL)		/* matrices not yet read */
     {
-      QAP_Load_Problem(p_ad->param_file, &qap_info);
+      QAP_Load_Problem(p_ad->param_file, &qap_info, 0);
 
-      mat_A = qap_info.a;
-      mat_B = qap_info.b;
+      exchange = (getenv("X") != NULL);
+      if (exchange)
+	{
+	  mat_A = qap_info.a;
+	  mat_B = qap_info.b;
+	  // printf("+++ SOLVING THE DUAL PROBLEM +++\n");
+	} 
+      else 
+	{
+	  mat_A = qap_info.b;
+	  mat_B = qap_info.a;
+	}
       
 #if SPEED == 2
       delta = QAP_Alloc_Matrix(size);
@@ -258,26 +268,34 @@ int param_needed = -1;		/* overwrite var of main.c */
 void
 Init_Parameters(AdData *p_ad)
 {
-  p_ad->size = QAP_Load_Problem(p_ad->param_file, NULL); /* get the problem size only */
+  QAP_Load_Problem(p_ad->param_file, &qap_info, 1); /* only read the header */
+
+  p_ad->size = qap_info.size;
+  p_ad->optim_pb = 1;
+
+  if (p_ad->target_cost == 0)
+    p_ad->target_cost = qap_info.bks;
+  else
+    p_ad->target_cost = qap_info.bound;
 
 				/* defaults */
   if (p_ad->prob_select_loc_min == -1)
-    p_ad->prob_select_loc_min = 50;
+    p_ad->prob_select_loc_min = 85;
 
   if (p_ad->freeze_loc_min == -1)
-    p_ad->freeze_loc_min = p_ad->size;
+    p_ad->freeze_loc_min = 2;//p_ad->size;
 
   if (p_ad->freeze_swap == -1)
     p_ad->freeze_swap = 0;
 
   if (p_ad->reset_limit == -1)
-    p_ad->reset_limit = 1;
+    p_ad->reset_limit = 5;//;
 
   if (p_ad->reset_percent == -1)
-    p_ad->reset_percent = 4;
+    p_ad->reset_percent = 20;
 
   if (p_ad->restart_limit == -1)
-    p_ad->restart_limit = 1000000000;
+    p_ad->restart_limit = 1000000;
 
   if (p_ad->restart_max == -1)
     p_ad->restart_max = 0;
@@ -295,6 +313,15 @@ Init_Parameters(AdData *p_ad)
 int
 Check_Solution(AdData *p_ad)
 {
- 
-  return 1;
+  int r = 1;
+  int i = Random_Permut_Check(p_ad->sol, p_ad->size, p_ad->actual_value, p_ad->base_value);
+  
+  if (i >= 0)
+    {
+      printf("ERROR: not a valid permutation, error at [%d] = %d\n", i, p_ad->sol[i]);
+      return 0;
+    }
+
+
+  return r;
 }

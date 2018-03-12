@@ -127,7 +127,7 @@ Solve(AdData *p_ad)
 #define ErrOn(k)   { err[k] += ERROR; err[k - dist] += ERROR; }
 
 
-inline int 
+static inline int 
 Cost(int *err)
 {
   int dist = 1;
@@ -541,15 +541,18 @@ Check_Solution(AdData *p_ad)
   int i, j, d;
   int r = 1;
 
+  i = Random_Permut_Check(p_ad->sol, p_ad->size, p_ad->actual_value, p_ad->base_value);
 
-  if (nb_occ == NULL)
+  if (i >= 0)
     {
-      nb_occ = (int *) malloc(size * 2 * sizeof(int));
-      if (nb_occ == NULL)
-	{
-	  printf("%s:%d malloc failed\n", __FILE__, __LINE__);
-	  exit(1);
-	}
+      printf("ERROR: not a valid permutation, error at [%d] = %d\n", i, p_ad->sol[i]);
+      return 0;
+    }
+
+  if (nb_occ == NULL && (nb_occ = (int *) malloc(size * 2 * sizeof(int))) == NULL)
+    {
+      printf("%s:%d malloc failed\n", __FILE__, __LINE__);
+      exit(1);
     }
 
   for(i = 1; i < size; i++)

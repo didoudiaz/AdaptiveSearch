@@ -363,6 +363,8 @@ Executed_Swap(int i1, int i2)
 
 
 
+int param_needed = 0;		/* overwrite var of main.c */
+
 /*
  *  INIT_PARAMETERS
  *
@@ -414,6 +416,14 @@ Check_Solution(AdData *p_ad)
   int *p;
   int r = 1;
 
+  int i = Random_Permut_Check(p_ad->sol, p_ad->size, p_ad->actual_value, p_ad->base_value);
+
+  if (i >= 0)
+    {
+      printf("ERROR: not a valid permutation, error at [%d] = %d\n", i, p_ad->sol[i]);
+      return 0;
+    }
+
   for(j = 0; j < NB_CSTR; j++)
     {
       x = 0;
@@ -423,8 +433,7 @@ Check_Solution(AdData *p_ad)
 
       if (x != cstr[j].right)
 	{
-	  printf("ERROR constraint %d, sum: %d should be %d\n",
-		 j + 1, x, cstr[j].right);
+	  printf("ERROR constraint %d, sum: %d should be %d\n", j + 1, x, cstr[j].right);
 	  r = 0;
 	}
     }

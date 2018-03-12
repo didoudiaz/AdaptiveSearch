@@ -3,10 +3,11 @@
  *
  *  Copyright (C) 2002-2010 Daniel Diaz, Philippe Codognet and Salvador Abreu
  *
- *  tools.h: utilities header file
+ *  tools.h: utilities - header file
  */
 
 #ifndef _TOOLS_H
+#define _TOOLS_H
 
 /*-----------*
  * Constants *

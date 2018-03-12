@@ -357,6 +357,15 @@ Check_Solution(AdData *p_ad)
 {
   int i1, j1, i2, j2;
 
+  int i = Random_Permut_Check(p_ad->sol, p_ad->size, p_ad->actual_value, p_ad->base_value);
+  
+  if (i >= 0)
+    {
+      printf("ERROR: not a valid permutation, error at [%d] = %d\n", i, p_ad->sol[i]);
+      return 0;
+    }
+
+
   for(i1 = 0; i1 < p_ad->size; i1++)
     {
       j1 = p_ad->sol[i1];

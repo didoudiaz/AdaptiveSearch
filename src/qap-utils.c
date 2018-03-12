@@ -18,7 +18,7 @@ typedef int **QAPMatrix;
 
 
 /* 
- * use the following cmd in the QA data directory to generate the fields of the structure
+ * use the following cmd in the QAP data directory to generate the fields of the structure
  * for i in `cut -f 1 -d ' ' *.qap | sort | uniq`; do printf '  int %s;\n' $i;done
  */
 
@@ -107,7 +107,7 @@ QAP_Read_Matrix(FILE *f, int n, QAPMatrix *pm)
  *  Returns the size of the problem
  */
 int
-QAP_Load_Problem(char *file_name, QAPInfo *qi)
+QAP_Load_Problem(char *file_name, QAPInfo *qi, int header_only)
 {
   int n;
   FILE *f;
@@ -168,11 +168,15 @@ QAP_Load_Problem(char *file_name, QAPInfo *qi)
 	    }
 	  else
 	    qi->bound = qi->opt;
-	} else
+	} 
+      else
 	qi->opt = qi->bks = qi->bound = 0;
 
-      QAP_Read_Matrix(f, n, &qi->a);
-      QAP_Read_Matrix(f, n, &qi->b);
+      if (!header_only)
+	{
+	  QAP_Read_Matrix(f, n, &qi->a);
+	  QAP_Read_Matrix(f, n, &qi->b);
+	}
     }
 
   fclose(f);

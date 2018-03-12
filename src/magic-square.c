@@ -23,7 +23,7 @@
 
 /* for a k in 0..size-1 gives line, col, d1 (1/0), d2 (0/1) */
 
-#if 1
+#if 0
 #define CELL
 #endif
 
@@ -129,7 +129,7 @@ static XRef *xref;
  *
  *  The projection on a variable at i, j:
  *  // err_var[i][j] = | err_l[i] + err_c[j] + F1(i,j) + F2(i,j) |  SLOW version
- *  err_var[i][j] = | err_l[i] + err_c[j] + F1(i,j) + F2(i,j) |
+ *  err_var[i][j] = | err_l[i] | + | err_c[j] | + | F1(i,j) | + | F2(i,j) |
  *  with F1(i,j) = err_d1 if i,j is on diagonal 1 (i.e. i=j) else = 0
  *  and  F2(i,j) = err_d2 if i,j is on diagonal 2 (i.e. j=square_length-1-i) else = 0
  */
@@ -456,16 +456,16 @@ Init_Parameters(AdData *p_ad)
     p_ad->prob_select_loc_min = 6;
 
   if (p_ad->freeze_loc_min == -1)
-    p_ad->freeze_loc_min = 1;
+    p_ad->freeze_loc_min = 5;
 
   if (p_ad->freeze_swap == -1)
     p_ad->freeze_swap = 0;
 
   if (p_ad->reset_limit == -1)
-    p_ad->reset_limit = square_length * 1.2;
+    p_ad->reset_limit = square_length;
 
   if (p_ad->reset_percent == -1)
-    p_ad->reset_percent = 25;
+    p_ad->reset_percent = 10;
 
   if (p_ad->restart_limit == -1)
     p_ad->restart_limit = 10000000;
@@ -492,6 +492,13 @@ Check_Solution(AdData *p_ad)
   int i, j;
   int sum_d1 = 0, sum_d2 = 0;
   
+  i = Random_Permut_Check(p_ad->sol, p_ad->size, p_ad->actual_value, p_ad->base_value);
+
+  if (i >= 0)
+    {
+      printf("ERROR: not a valid permutation, error at [%d] = %d\n", i, p_ad->sol[i]);
+      return 0;
+    }
 
   for(i = 0; i < square_length; i++)
     {

@@ -39,6 +39,35 @@ static long long sum_mid_x2, cur_mid_x2;
  *------------*/
 
 
+
+/* Partition numbers 1,2,...,N into two groups A and B such that:
+ *   a) A and B have the same length,
+ *   b) sum of numbers in A = sum of numbers in B,
+ *   c) sum of squares of numbers in A = sum of squares of numbers in B.
+ *
+ * It seems there is a solution if N >= 8 and N is a multiple of 4.
+ *
+ * Two redundant constraints are used:
+ *
+ *   - in order to avoid duplicate solutions (permutations) we impose
+ *     A1<A2<....<AN/2, B1<B2<...<BN/2 and A1=1. This achieves much more
+ *     pruning than only one fd_all_different constraint.
+ *
+ *   - the half sums are known
+ *                              N
+ *        Sum k^1 = Sum l^1 = (Sum i) / 2 = N*(N+1) / 2 / 2
+ *       k in A    l in B      i=1
+ *                              N
+ *        Sum k^2 = Sum l^2 = (Sum i^2)/2 = N*(N+1)*(2*N+1) / 6 / 2
+ *       k in A    l in B      i=1
+ *
+ * N=8  A=[1,4,6,7] 
+ *      B=[2,3,5,8]
+ *
+ * N=16 A=[1,4,6,7,10,11,13,16]
+ *      B=[2,3,5,8,9,12,14,15]
+ */
+
 /*
  *  MODELING
  *
@@ -114,7 +143,7 @@ int Next_I(int i)
   return i < size2 ? i : size;
 }
 
-int Next_J(int i, int j)
+int Next_J(int i, int j, int exhaustive)
 {
   return (j < 0) ? size2 : j + 1;
 }
@@ -207,7 +236,7 @@ Init_Parameters(AdData *p_ad)
  *  sum_x = size * (size + 1) / 2
  *  sum_x2 = size * (size + 1) * (2 * size + 1) / 6
  *
- *  We are interested in theses sums / 2 thus:
+ *  We are interested in these sums / 2 thus:
  */
 
   int sum_mid_x = (size * (size + 1)) / 4;
@@ -261,11 +290,18 @@ Init_Parameters(AdData *p_ad)
 int
 Check_Solution(AdData *p_ad)
 {
-  int i;
   int size = p_ad->size;
   int size2 = size / 2;
   int sum_a = 0, sum_b = 0;
   long long sum_a2 = 0, sum_b2 = 0;
+
+  int i = Random_Permut_Check(p_ad->sol, p_ad->size, p_ad->actual_value, p_ad->base_value);
+
+  if (i >= 0)
+    {
+      printf("ERROR: not a valid permutation, error at [%d] = %d\n", i, p_ad->sol[i]);
+      return 0;
+    }
 
   for(i = 0; i < size2; i++)
     {

@@ -1,3 +1,11 @@
+Change in version 1.0.5
+
+* Next_I() and Next_J can be also used with non-exhaustive search
+  (impact Select_Var_High_Cost(), Select_Var_Min_Conflict() and Next_J())
+* initial configuration can be customized using Set_Init_Configuration()
+* all Check_Solution() new test if the result is really a permutation.
+* improve parameters for langford, magic-square
+
 Change in version 1.0.4
 
 * improve Costas Array Problem (CAP) example

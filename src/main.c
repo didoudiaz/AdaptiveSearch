@@ -32,7 +32,7 @@ static int check_valid;
 static int read_initial;	/* 0=no, 1=yes, 2=all threads use the same (CELL specific) */
 
 
-int param_needed;		/* overwritten by benches if an argument is needed (> 0 = integer, < 0 = file name) */
+extern int param_needed;	/* overwritten by benches if an argument is needed (> 0 = integer, < 0 = file name) */
 char *user_stat_name;		/* overwritten by benches if a user statistics is needed */
 int (*user_stat_fct)(AdData *p_ad); /* overwritten by benches if a user statistics is needed */
 
@@ -94,6 +94,7 @@ main(int argc, char *argv[])
   double nb_same_var_by_iter_cum;
 
 
+  int    total_cost_cum,              total_cost_min,              total_cost_max;
   int    nb_restart_cum,              nb_restart_min,              nb_restart_max;
   double time_cum,                    time_min,                    time_max;
 
@@ -151,7 +152,19 @@ main(int argc, char *argv[])
 	}
     }
 
+  printf("problem size: %d\n", p_ad->size);
   printf("current random seed used: %d\n", p_ad->seed);
+  if (p_ad->optim_pb)
+    printf("Optimization problem (best solution will be returned)\n");
+  if (p_ad->target_cost)
+    {
+      if (!p_ad->optim_pb)
+	printf("warning: target given but -O not given (last solution will be returned)\n");
+
+      printf("stop when cost %s %d %s\n", 
+	     (p_ad->target_exact) ? "==" : "<=", 
+	     p_ad->target_cost, (p_ad->target_exact) ? "exact target" : "");
+    }
   printf("variables of loc min are frozen for: %d swaps\n", p_ad->freeze_loc_min);
   printf("variables swapped    are frozen for: %d swaps\n", p_ad->freeze_swap);
   if (p_ad->reset_percent >= 0)
@@ -184,29 +197,40 @@ main(int argc, char *argv[])
 
       Verify_Sol(p_ad);
 
-      if (p_ad->total_cost)
-	printf("*** NOT SOLVED (cost of this pseudo-solution: %d) ***\n", p_ad->total_cost);
+      if (!TARGET_REACHED(p_ad))
+	{
+	  if (p_ad->target_cost == 0)
+	    printf("*** NOT SOLVED (cost: %d) ***\n", p_ad->total_cost);
+	  else
+	    printf("*** TARGET NOT REACHED (target cost: %d, solution cost: %d) ***\n",
+		   p_ad->target_cost, p_ad->total_cost); 
+	}
 
       if (count == 0)
 	{
 	  nb_same_var_by_iter = (double) p_ad->nb_same_var / p_ad->nb_iter;
 	  nb_same_var_by_iter_tot = (double) p_ad->nb_same_var_tot / p_ad->nb_iter_tot;
 
-	  printf("%5d %8.2f %8d %8d %8d %8d %8.1f %8d %8d %8d %8d %8.1f", 
-		 p_ad->nb_restart, time_one, 
+	  printf("%6d %9d %9.2f %9d %9d %9d %9d %9.1f %9d %9d %9d %9d %9.1f", 
+		 p_ad->nb_restart, p_ad->total_cost, time_one, 
 		 p_ad->nb_iter, p_ad->nb_local_min, p_ad->nb_swap, 
 		 p_ad->nb_reset, nb_same_var_by_iter,
 		 p_ad->nb_iter_tot, p_ad->nb_local_min_tot, p_ad->nb_swap_tot, 
 		 p_ad->nb_reset_tot, nb_same_var_by_iter_tot);
 	  if (user_stat_fct)
-	    printf(" %8d", (*user_stat_fct)(p_ad));
+	    printf("%9d", (*user_stat_fct)(p_ad));
 	  printf("\n");
 	}
       else
 	{
-	  printf("in %.2f secs (%d restarts, %d iters, %d loc min, %d swaps, %d resets)\n", 
-		 time_one, p_ad->nb_restart, p_ad->nb_iter_tot, p_ad->nb_local_min_tot, 
+	  printf("in %.2f secs (restarts: %d, cost: %d, iters: %d, loc min: %d, swaps: %d, resets: %d", 
+		 time_one, p_ad->nb_restart, p_ad->total_cost, 
+		 p_ad->nb_iter_tot, p_ad->nb_local_min_tot, 
 		 p_ad->nb_swap_tot, p_ad->nb_reset_tot);
+	  if (user_stat_name && user_stat_fct)
+	    printf(", %s: %d", user_stat_name,  (*user_stat_fct)(p_ad));
+
+	  printf(")\n");
 	}
 
       return 0;
@@ -216,11 +240,11 @@ main(int argc, char *argv[])
 
 
   if (user_stat_name)
-    sprintf(str, " %8s |", user_stat_name);
+    sprintf(str, "%9s |", user_stat_name);
   else
     *str = '\0';
 
-  sprintf(buff, "|Count|restart|     time |    iters |  loc min |    swaps "
+  sprintf(buff, "|count|restart| sol cost |     time |    iters |  loc min |    swaps "
 	  "|   resets | same/iter|%s\n", str);
 
   if (param_needed > 0)
@@ -237,7 +261,7 @@ main(int argc, char *argv[])
   printf("\n\n");
 
   
-  nb_restart_cum = time_cum = user_stat_cum = 0;
+  total_cost_cum = nb_restart_cum = time_cum = user_stat_cum = 0;
 
   nb_iter_cum = nb_local_min_cum = nb_swap_cum = nb_reset_cum = 0;
   nb_same_var_by_iter_cum = user_stat_cum = 0;
@@ -246,13 +270,13 @@ main(int argc, char *argv[])
   nb_iter_tot_cum = nb_local_min_tot_cum = nb_swap_tot_cum = nb_reset_tot_cum = 0;
   nb_same_var_by_iter_tot_cum = 0;
 
-  nb_restart_min = user_stat_min = (1 << 30);
+  total_cost_min = nb_restart_min = user_stat_min = (1 << 30);
   time_min = 1e100;
   
   nb_iter_tot_min = nb_local_min_tot_min = nb_swap_tot_min = nb_reset_tot_min = (1 << 30);
   nb_same_var_by_iter_tot_min = 1e100;
 
-  nb_restart_max = user_stat_max = 0;
+  total_cost_max = nb_restart_max = user_stat_max = 0;
   time_max = 0;
  
   nb_iter_tot_max = nb_local_min_tot_max = nb_swap_tot_max = nb_reset_tot_max = 0;
@@ -266,8 +290,8 @@ main(int argc, char *argv[])
 
 
       p_ad->seed = Random(65536);
+      //if (i == 3) printf("\n\n\nseed ================ %d\n", p_ad->seed);
       time_one0 = (double) User_Time();
-      //if (i == 57) printf("\n\n\nseed ================ %d\n", p_ad->seed), xxx=1;
       Solve(p_ad);
       time_one = ((double) User_Time() - time_one0) / 1000;
 
@@ -285,6 +309,7 @@ main(int argc, char *argv[])
       nb_same_var_by_iter = (double) p_ad->nb_same_var / p_ad->nb_iter;
       nb_same_var_by_iter_tot = (double) p_ad->nb_same_var_tot / p_ad->nb_iter_tot;
 
+      total_cost_cum += p_ad->total_cost;
       nb_restart_cum += p_ad->nb_restart;
       time_cum += time_one;
       nb_iter_cum += p_ad->nb_iter;
@@ -300,6 +325,8 @@ main(int argc, char *argv[])
       nb_reset_tot_cum += p_ad->nb_reset_tot;
       nb_same_var_by_iter_tot_cum += nb_same_var_by_iter_tot;
 
+      if (total_cost_min > p_ad->total_cost)
+	total_cost_min = p_ad->total_cost;
       if (nb_restart_min > p_ad->nb_restart)
 	nb_restart_min = p_ad->nb_restart;
       if (time_min > time_one)
@@ -317,6 +344,8 @@ main(int argc, char *argv[])
       if (user_stat_min > user_stat)
 	user_stat_min = user_stat;
 
+      if (total_cost_max < p_ad->total_cost)
+	total_cost_max = p_ad->total_cost;
       if (nb_restart_max < p_ad->nb_restart)
 	nb_restart_max = p_ad->nb_restart;
       if (time_max < time_one)
@@ -339,17 +368,17 @@ main(int argc, char *argv[])
 	{
 	case 0:			/* only last iter counters */
 	case 2:			/* last iter followed by restart if needed */
-	  printf("|%4d | %5d%c| %8.2f | %8d | %8d | %8d | %8d | %8.1f |",
-		 i, p_ad->nb_restart, (p_ad->total_cost == 0) ? ' ' : 'N', time_one,
-		 p_ad->nb_iter, p_ad->nb_local_min, p_ad->nb_swap,
+	  printf("|%4d |%6d |%9d%c|%9.2f |%9d |%9d |%9d |%9d |%9.1f |",		 
+		 i, p_ad->nb_restart, p_ad->total_cost, TARGET_REACHED(p_ad) ? ' ' : '*', 
+		 time_one, p_ad->nb_iter, p_ad->nb_local_min, p_ad->nb_swap,
 		 p_ad->nb_reset, nb_same_var_by_iter);
 	  if (user_stat_fct)
-	    printf(" %8d |", user_stat);
+	    printf("%9d |", user_stat);
 	  printf("\n");
 
 	  if (disp_mode == 2 && p_ad->nb_restart > 0) 
 	    {
-	      printf("|     |       |          | %8d | %8d | %8d | %8d | %8.1f |",
+	      printf("|     |       |          |          |%9d |%9d |%9d |%9d |%9.1f |",
 		     p_ad->nb_iter_tot, p_ad->nb_local_min_tot, p_ad->nb_swap_tot,
 		     p_ad->nb_reset_tot, nb_same_var_by_iter_tot);
 	      if (user_stat_fct)
@@ -359,18 +388,20 @@ main(int argc, char *argv[])
 
 	  printf("%s", buff);
 
-	  printf("| avg | %5d | %8.2f | %8d | %8d | %8d | %8d | %8.1f |",
-		 nb_restart_cum / i, time_cum / i,
+	  printf("| avg |%6d |%9d |%9.2f |%9d |%9d |%9d |%9d |%9.1f |",
+		 nb_restart_cum / i, total_cost_cum / i, time_cum / i,
 		 nb_iter_cum / i, nb_local_min_cum / i, nb_swap_cum / i,
 		 nb_reset_cum / i, nb_same_var_by_iter_cum / i);
 	  if (user_stat_fct)
-	    printf(" %8.2f |", (double) user_stat_cum / i);
+	    printf("%9.2f |", (double) user_stat_cum / i);
+	  if (p_ad->optim_pb || p_ad->target_cost > 0)
+	    printf(" min cost: %d", total_cost_min);
 	  printf("\n");
 
 
 	  if (disp_mode == 2 && nb_restart_cum > 0) 
 	    {
-	      printf("|     |       |          | %8d | %8d | %8d | %8d | %8.1f |",
+	      printf("|     |       |          |          |%9d |%9d |%9d |%9d |%9.1f |",
 		     nb_iter_tot_cum / i, nb_local_min_tot_cum / i, nb_swap_tot_cum / i,
 		     nb_reset_tot_cum / i, nb_same_var_by_iter_tot_cum / i);
 	      if (user_stat_fct)
@@ -380,22 +411,24 @@ main(int argc, char *argv[])
 	  break;
 
 	case 1:			/* only total (restart + last iter) counters */
-	  printf("|%4d | %5d%c| %8.2f | %8d | %8d | %8d | %8d | %8.1f |",
-		 i, p_ad->nb_restart, (p_ad->total_cost == 0) ? ' ' : 'N', time_one,
-		 p_ad->nb_iter_tot, p_ad->nb_local_min_tot, p_ad->nb_swap_tot,
+	  printf("|%4d |%6d |%9d%c|%9.2f |%9d |%9d |%9d |%9d |%9.1f |",
+		 i, p_ad->nb_restart, p_ad->total_cost, TARGET_REACHED(p_ad) ? ' ' : '*',
+		 time_one, p_ad->nb_iter_tot, p_ad->nb_local_min_tot, p_ad->nb_swap_tot,
 		 p_ad->nb_reset_tot, nb_same_var_by_iter_tot);
 	  if (user_stat_fct)
-	    printf(" %8d |", user_stat);
+	    printf("%9d |", user_stat);
 	  printf("\n");
 
 	  printf("%s", buff);
 
-	  printf("| avg | %5d | %8.2f | %8d | %8d | %8d | %8d | %8.1f |",
-		 nb_restart_cum / i, time_cum / i,
+	  printf("| avg |%6d |%9d |%9.2f |%9d |%9d |%9d |%9d |%9.1f |",
+		 nb_restart_cum / i, total_cost_cum / i, time_cum / i,
 		 nb_iter_tot_cum / i, nb_local_min_tot_cum / i, nb_swap_tot_cum / i,
 		 nb_reset_tot_cum / i, nb_same_var_by_iter_tot_cum / i);
 	  if (user_stat_fct)
-	    printf(" %8.2f |", (double) user_stat_cum / i);
+	    printf("%9.2f |", (double) user_stat_cum / i);
+	  if (p_ad->optim_pb || p_ad->target_cost > 0)
+	    printf(" min cost: %d", total_cost_min);
 	  printf("\n");
 	  break;
 	}
@@ -404,20 +437,20 @@ main(int argc, char *argv[])
   if (count <= 0)
     return 0;
 
-  printf("| min | %5d | %8.2f | %8d | %8d | %8d | %8d | %8.1f |",
-	 nb_restart_min, time_min,
+  printf("| min |%6d |%9d |%9.2f |%9d |%9d |%9d |%9d |%9.1f |",
+	 nb_restart_min, total_cost_min, time_min,
 	 nb_iter_tot_min, nb_local_min_tot_min, nb_swap_tot_min,
 	 nb_reset_tot_min, nb_same_var_by_iter_tot_min);
   if (user_stat_fct)
-    printf(" %8d |", user_stat_min);
+    printf("%9d |", user_stat_min);
   printf("\n");
 
-  printf("| max | %5d | %8.2f | %8d | %8d | %8d | %8d | %8.1f |",
-	 nb_restart_max, time_max,
+  printf("| max |%6d |%9d |%9.2f |%9d |%9d |%9d |%9d |%9.1f |",
+	 nb_restart_max, total_cost_max, time_max,
 	 nb_iter_tot_max, nb_local_min_tot_max, nb_swap_tot_max,
 	 nb_reset_tot_max, nb_same_var_by_iter_tot_max);
   if (user_stat_fct)
-    printf(" %8d |", user_stat_max);
+    printf("%9d |", user_stat_max);
   printf("\n");
 
 
@@ -444,22 +477,13 @@ Set_Initial(AdData *p_ad)
 	  {}
       getchar();		/* the last \n */
       Display_Solution(p_ad);
-      i = Random_Permut_Check(p_ad->sol, p_ad->size, p_ad->actual_value, p_ad->base_value);
-      if (i >= 0)
-	{
-	  fprintf(stderr, "not a valid permutation, error at [%d] = %d\n",
-		  i, p_ad->sol[i]);
-	  Random_Permut_Repair(p_ad->sol, p_ad->size, p_ad->actual_value, p_ad->base_value);
-	  printf("possible repair:\n");
-	  Display_Solution(p_ad);
-	  exit(1);
-	}
       p_ad->do_not_init = 1;
+      Check_Init_Configuration(p_ad);
       break;
 
     case 2:
-      Random_Permut(p_ad->sol, p_ad->size, p_ad->actual_value, p_ad->base_value);
       p_ad->do_not_init = 1;
+      Set_Init_Configuration(p_ad);
       break;
     }
 
@@ -479,17 +503,15 @@ Set_Initial(AdData *p_ad)
 static void
 Verify_Sol(AdData *p_ad)
 {
-  if (p_ad->total_cost != 0 || !check_valid)
+  if (!check_valid)
     return;
 
-  int i = Random_Permut_Check(p_ad->sol, p_ad->size, p_ad->actual_value, p_ad->base_value);
-  if (i >= 0)
-    {
-      fprintf(stderr, "*** Erroneous Solution !!! not a valid permutation, error at [%d] = %d\n", i, p_ad->sol[i]);
-    }
-  else
-    if (!Check_Solution(p_ad))
-      printf("*** Erroneous Solution !!!\n");
+  int c = Cost_Of_Solution(0);
+  if (c != p_ad->total_cost)
+    printf("\n*** ERROR real cost:%d != returned cost: %d\n", c, p_ad->total_cost);
+
+  if (p_ad->total_cost == 0 && !Check_Solution(p_ad))
+    printf("*** Erroneous Solution !!!\n");
 }
 
 
@@ -528,6 +550,8 @@ Parse_Cmd_Line(int argc, char *argv[], AdData *p_ad)
   p_ad->restart_max = -1;
   p_ad->exhaustive = 0;
   p_ad->first_best = 0;
+  p_ad->optim_pb = 0;
+  p_ad->target_cost = 0;
 
 
   for(i = 1; i < argc; i++)
@@ -656,6 +680,21 @@ Parse_Cmd_Line(int argc, char *argv[], AdData *p_ad)
 	      p_ad->restart_max = atoi(argv[i]);
 	      continue;
 
+	    case 'O':
+	      p_ad->optim_pb = 1;
+	      continue;
+
+	    case 'T':
+	      if (++i >= argc)
+		{
+		  L("target cost expected");
+		  exit(1);
+		}
+	      p_ad->target_cost = atoi(argv[i]);
+	      p_ad->target_exact = (p_ad->target_cost < 0);
+	      p_ad->target_cost = abs(p_ad->target_cost);
+	      continue;
+
 #ifdef CELL
 	    case 't':
 	      if (++i >= argc)
@@ -680,7 +719,7 @@ Parse_Cmd_Line(int argc, char *argv[], AdData *p_ad)
 
 	      L("");
 	      L("   -i          read initial configuration");
-	      L("   -D LEVEL    set debug mode (0=debug info, 1=step-by-step)");
+	      L("   -D LEVEL    set debug mode (0=no, 1=debug info, 2=step-by-step)");
 	      L("   -L FILE     use file as log file");
 	      L("   -c          check if the solution is valid");
 	      L("   -s SEED     specify random seed");
@@ -695,6 +734,8 @@ Parse_Cmd_Line(int argc, char *argv[], AdData *p_ad)
 	      L("   -p PERCENT  reset PERCENT %% of variables");
 	      L("   -a NB       abort and restart when NB iterations are reached");
 	      L("   -r COUNT    restart at most COUNT times");
+	      L("   -O          optimization problem (keep the best at each step)");
+	      L("   -T TARGET   stop when cost is <= TARGET (or when cost == -TARGET if TARGET is < 0)");
 	      L("   -e          exhaustive seach (do all combinations)");
 	      L("   -h          show this help");
 #ifdef CELL

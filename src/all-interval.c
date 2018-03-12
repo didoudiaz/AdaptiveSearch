@@ -142,7 +142,7 @@ Cost_Of_Solution(int should_be_recorded)
     nb_occ[abs(sol[i] - sol[i + 1])]++;
 
 #ifdef NO_TRIVIAL
-  if (Is_Trivial_Solution(sol, size))
+  if (should_be_recorded && Is_Trivial_Solution(sol, size))
     return size;
 #endif
 
@@ -311,8 +311,19 @@ Trivial_Statistics(AdData *p_ad)
 }
 
 int param_needed = 1;		/* overwrite var of main.c */
-char *user_stat_name = "trivial";
-int (*user_stat_fct)(AdData *p_ad) = Trivial_Statistics;
+char *user_stat_name;
+int (*user_stat_fct)(AdData *p_ad);
+
+static void
+Init(void) __attribute__ ((constructor));
+
+static void
+Init(void)
+{
+  user_stat_name = "trivial";
+  user_stat_fct = Trivial_Statistics;
+}
+
 
 /*
  *  INIT_PARAMETERS
@@ -365,7 +376,13 @@ int
 Check_Solution(AdData *p_ad)
 {
   int r = 1;
-  int i;
+  int i = Random_Permut_Check(p_ad->sol, p_ad->size, p_ad->actual_value, p_ad->base_value);
+
+  if (i >= 0)
+    {
+      printf("ERROR: not a valid permutation, error at [%d] = %d\n", i, p_ad->sol[i]);
+      return 0;
+    }
 
 
   if (nb_occ == NULL)
