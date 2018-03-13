@@ -32,12 +32,6 @@ EXECS=magic-square queens alpha all-interval partit langford langford3 skolem sk
 %: %.c $(LIBNAME)
 	$(CC) -o $@ $(CFLAGS) $< $(LIBNAME) -lm
 
-%-cell: spu/%.a Makefile.cell
-	make -f Makefile.cell DEBUG=$(DEBUG) COMM=$(COMM) libdefaults.a
-	make -f Makefile.cell DEBUG=$(DEBUG) COMM=$(COMM) BENCH=$(@:-cell=)
-
-spu/%.a: %.c
-	cd spu; make COMM=$(COMM) DEBUG=$(DEBUG) BENCH=$*
 
 
 all: $(EXECS)
@@ -106,5 +100,4 @@ BENCH.sql: $(BENCH:.txt=.sql)
 # cleaning
 
 clean:
-	cd spu; make clean realclean; rm -f $(EXECS) 
-	rm -f *.o *.a *.d *~ $(EXECS) *-spu-thread.*
+	rm -f *.o *.a *.d *~ $(EXECS)
