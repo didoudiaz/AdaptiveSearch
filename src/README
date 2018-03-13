@@ -1,29 +1,3 @@
-Cell/BE notes:
-
-- future colab P.Barahona:
-* new heuristics beyond ffirst (impact, dom/wdeg, lookahead)
-* use LS to guide CP (heuristics?)
-
-- data structures:
-
-struct spu_data: includes an AdData (ad) & an int* (value)
-in the PPU this is (global) sds[i]
-in the SPU this is (global) sd
-
-sds[i].
-
-- PPU
-
--- runs main
--- main calls Solve() which calls as_init(), which
---- initializes the sds[i] data structure
---- creates and starts a new SPU thread
-
-- SPU
-
--- each runs main (spu/main)
--- main (spu/main) calls benchmark-specific Solve()
-
 - benchmarks to try
 * langford 60, 72, 80...
 * partit 8*n (1600)
