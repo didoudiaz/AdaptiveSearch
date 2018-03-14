@@ -12,12 +12,12 @@
 /src/alpha
 /src/costas
 /src/langford
+/src/langford3
+/src/skolem
+/src/skolem3
+/src/smti
 /src/magic-square
 /src/partit
 /src/perfect-square
 /src/qap
 /src/queens
-/src/COSTAS
-/src/ALL-INTERVAL.TXT
-/src/CELL.TXT
-/src/COSTAS-CELL
