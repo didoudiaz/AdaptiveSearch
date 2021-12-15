@@ -13,6 +13,9 @@ AR=ar
 CFLAGS=-fomit-frame-pointer -O3 -W -Wall -Wno-unused-parameter \
 	-DDEBUG=$(DEBUG) $(COMM)
 
+CFLAGS=$(CLFGAS) -fcommon
+
+
 # for profiling
 
 #CFLAGS=-g -Wall -DDEBUG -DLOG_FILE -pg
