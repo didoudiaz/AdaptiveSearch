@@ -30,7 +30,7 @@ OBJLIB = ad_solver.o tools.o main.o \
 
 LIBNAME=libad_solver.a
 
-EXECS=magic-square queens alpha all-interval partit langford langford3 skolem skolem3 perfect-square costas qap smti
+EXECS=magic-square queens alpha all-interval partit langford langford3 skolem skolem3 perfect-square costas qap smti smti-gener
 
 %: %.c $(LIBNAME)
 	$(CC) -o $@ $(CFLAGS) $< $(LIBNAME) -lm
@@ -56,6 +56,9 @@ skolem: langford.c
 skolem3: langford.c
 
 smti: smti-utils.c
+
+smti-gener: smti-utils.c
+	$(CC) -o $@ $(CFLAGS) smti-utils.c $(LIBNAME) -lm
 
 qap: qap-utils.c
 
