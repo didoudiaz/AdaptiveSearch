@@ -92,9 +92,9 @@ SMP_Free_Matrix(SMPMatrix mat, int size)
 }
 
 
-#define RD_ERROR         ((1 << 31) | 0)
-#define RD_END_OF_FILE   ((1 << 31) | 1)
-#define RD_NEW_LINE      ((1 << 31) | 2)
+#define RD_ERROR         ((1 << 30) | 0)
+#define RD_END_OF_FILE   ((1 << 30) | 1)
+#define RD_NEW_LINE      ((1 << 30) | 2)
 
 int 
 Read_Integer(FILE *f, int ignore_new_line)
@@ -138,7 +138,7 @@ SMP_Read_Matrix(FILE *f, int size, SMPMatrix *pm, int format_is_dat)
 
       for(k = 0; k < size; k++)
 	{
-	  w = Read_Integer(f, k == 0);
+	  w = Read_Integer(f, m == 0 && k == 0); /* only ignore new line at beginning of matrix */
 
 	  if (w == RD_END_OF_FILE || w == RD_NEW_LINE)
 	    break;
@@ -166,6 +166,13 @@ SMP_Read_Matrix(FILE *f, int size, SMPMatrix *pm, int format_is_dat)
 
       (*pm)[m][k] = -1;		/* final -1 */
     }
+#if 0
+  void SMP_Write_Matrix(FILE *f, int size, SMPMatrix pm, int format_is_dat);
+  printf("-- matrix ---\n");
+  SMP_Write_Matrix(stdout, size, *pm, format_is_dat);
+  printf("-------------\n");
+#endif
+
 }
 
 

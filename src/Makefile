@@ -8,12 +8,12 @@ CC=gcc
 AR=ar
 
 #CFLAGS=-g -Wall -DDEBUG -DLOG_FILE
-#CFLAGS=-g -Wall -DDEBUG
+CFLAGS=-g -Wall -DDEBUG
 #CFLAGS=-fomit-frame-pointer -O3 -DLOG_FILE -Wall
-CFLAGS=-fomit-frame-pointer -O3 -W -Wall -Wno-unused-parameter \
-	-DDEBUG=$(DEBUG) $(COMM)
+#CFLAGS=-fomit-frame-pointer -O3 -W -Wall -Wno-unused-parameter \
+#	-DDEBUG=$(DEBUG) $(COMM)
 
-CFLAGS=$(CLFGAS) -fcommon
+CFLAGS:=$(CFLAGS) -fcommon
 
 
 # for profiling
